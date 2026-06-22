@@ -12,18 +12,21 @@ Wfolio + админка-PWA для iPhone/iPad + уведомления в Teleg
 | `service-worker.js` | Офлайн-кэш оболочки (**в корне**) | GitHub Pages |
 | `firebase-messaging-sw.js` | Фоновые push FCM (**в корне**) | GitHub Pages |
 | `icons/` | Иконки PWA: `icon-192.png`, `icon-512.png`, `icon-512-maskable.png` | GitHub Pages |
-| `booking-form.html` | Форма заявки (HTML-блок) | вставляется на страницу Wfolio |
 | `Code.gs` | Apps Script: Telegram + push | Google Apps Script (Web App) |
 | `firestore.rules` | Правила безопасности Firestore | Firebase Console |
+| `seed-packages.js` | Заполнение коллекции `packages` | запуск локально |
+
+> Форма заявки (HTML-блок) живёт **не в репозитории**, а вставлена напрямую в
+> HTML-блок на странице Wfolio.
 
 > ⚠️ Service worker'ы **обязаны лежать в корне** репозитория (рядом с `index.html`),
 > иначе scope PWA и фоновые push не работают.
 
 ## Плейсхолдеры (заменить перед деплоем)
 
-- `FIREBASE_CONFIG` — в `booking-form.html`, `index.html`, `firebase-messaging-sw.js`
+- `FIREBASE_CONFIG` — в `index.html`, `firebase-messaging-sw.js` и в HTML-блоке формы на Wfolio
 - `VAPID_KEY` — в `index.html`
-- `APPSCRIPT_URL` — в `booking-form.html`
+- `APPSCRIPT_URL` — в HTML-блоке формы на Wfolio
 
 Секреты (`TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID`, `SERVICE_ACCOUNT`, `FIREBASE_PROJECT_ID`)
 хранятся **только** в Script Properties Apps Script — в HTML их нет.
@@ -38,8 +41,8 @@ Wfolio + админка-PWA для iPhone/iPad + уведомления в Teleg
 3. **Build → Firestore Database → Create database** (production mode, регион
    `eur3`/`europe-west`).
 4. **Project settings → General → Your apps → Web (`</>`)** → зарегистрировать
-   приложение → скопировать объект `firebaseConfig` и вставить в три файла
-   (`index.html`, `booking-form.html`, `firebase-messaging-sw.js`).
+   приложение → скопировать объект `firebaseConfig` и вставить в `index.html`,
+   `firebase-messaging-sw.js` и в HTML-блок формы на Wfolio.
 5. **Cloud Messaging → Web configuration → Generate key pair** → скопировать
    ключ в `VAPID_KEY` (`index.html`).
 6. **Firestore → Rules** → вставить содержимое `firestore.rules` → **Publish**.
@@ -114,7 +117,7 @@ node seed-packages.js
      (Firebase → **Project settings → Service accounts → Generate new private key**).
 3. **Deploy → New deployment → Web app**: *Execute as* — **Me**,
    *Who has access* — **Anyone** → скопируйте URL в `APPSCRIPT_URL`
-   (`booking-form.html`).
+   (HTML-блок формы на Wfolio).
 
 > Push в PWA — опционально. Без `SERVICE_ACCOUNT`/`FIREBASE_PROJECT_ID`
 > работает только Telegram-уведомление.
@@ -140,9 +143,9 @@ node seed-packages.js
 
 ## 5. Форма на Wfolio
 
-Вставьте содержимое `booking-form.html` HTML-блоком на нужную страницу Wfolio
-(предварительно заполнив `FIREBASE_CONFIG` и `APPSCRIPT_URL`). Стили изолированы
-под класс `.cvh-booking` и не конфликтуют с темой сайта.
+Код формы вставлен HTML-блоком прямо на нужную страницу Wfolio (в репозитории
+он не хранится). В нём заполнены `FIREBASE_CONFIG` и `APPSCRIPT_URL`. Стили
+изолированы под класс `.cvh-booking` и не конфликтуют с темой сайта.
 
 ---
 
