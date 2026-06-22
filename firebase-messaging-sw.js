@@ -5,12 +5,12 @@ importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js
 importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js");
 
 firebase.initializeApp({
-  apiKey: "ВСТАВЬТЕ_apiKey",
-  authDomain: "ВСТАВЬТЕ.firebaseapp.com",
-  projectId: "ВСТАВЬТЕ_projectId",
-  storageBucket: "ВСТАВЬТЕ.appspot.com",
-  messagingSenderId: "ВСТАВЬТЕ",
-  appId: "ВСТАВЬТЕ_appId"
+  apiKey: "AIzaSyC5ZzSnqXvA5p8b8NYjOPtRjHB2sDTkJmE",
+  authDomain: "daria-booking-baae5.firebaseapp.com",
+  projectId: "daria-booking-baae5",
+  storageBucket: "daria-booking-baae5.firebasestorage.app",
+  messagingSenderId: "486073637927",
+  appId: "1:486073637927:web:c1d87f66a2ec50a3acc202"
 });
 
 const messaging = firebase.messaging();
