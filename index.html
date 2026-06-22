@@ -162,6 +162,21 @@ input,select{font:inherit;}
   margin-bottom:14px;display:flex;align-items:center;gap:12px;font-size:13px;}
 .notif-banner .material-symbols-outlined{font-size:22px;}
 .notif-banner .btn{padding:9px 16px;font-size:13px;margin-left:auto;}
+
+/* статистика */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 18px;}
+.stat{background:var(--white);border:1px solid var(--line-10);border-radius:22px;padding:16px 18px;
+  display:flex;align-items:center;gap:14px;transition:.35s var(--ease);}
+.stat .si{width:42px;height:42px;border-radius:999px;background:var(--ink);color:#fff;flex:none;
+  display:flex;align-items:center;justify-content:center;}
+.stat .si .material-symbols-outlined{font-size:22px;}
+.stat .sv{font-size:26px;font-weight:300;line-height:1;letter-spacing:-.02em;}
+.stat .sl{font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--gray);margin-top:5px;}
+
+/* pull-to-refresh */
+.pull-ind{height:0;opacity:0;overflow:hidden;display:flex;align-items:center;justify-content:center;
+  transition:opacity .2s var(--ease);}
+.spin.dark{border-color:rgba(29,29,31,.2);border-top-color:var(--ink);}
 </style>
 </head>
 <body>
@@ -186,6 +201,7 @@ input,select{font:inherit;}
   </div>
 
   <div id="notifBanner"></div>
+  <div class="pull-ind" id="pullInd"><span class="spin dark"></span></div>
 
   <div class="tabs">
     <button class="tab on" data-tab="bookings">Заявки<span class="badge" id="pendBadge">0</span></button>
@@ -193,7 +209,7 @@ input,select{font:inherit;}
   </div>
 
   <!-- BOOKINGS -->
-  <div class="view on" id="view-bookings"><div id="bookingsList"></div></div>
+  <div class="view on" id="view-bookings"><div class="stats" id="stats"></div><div id="bookingsList"></div></div>
 
   <!-- CALENDAR -->
   <div class="view" id="view-calendar">
@@ -320,6 +336,8 @@ function renderBookings(){
   badge.textContent=pend.length; badge.style.display = pend.length ? "flex" : "none";
   $("#logoutBtn").classList.toggle("alert", pend.length>0);
 
+  renderStats();
+
   var el=$("#bookingsList");
   if(!bookings.length){ el.innerHTML='<div class="empty"><span class="material-symbols-outlined">inbox</span>Заявок пока нет</div>'; return; }
   // pending сверху
@@ -335,6 +353,17 @@ function renderBookings(){
       '<div class="when"><span class="material-symbols-outlined">event</span>'+fmtSlot(b)+'</div>'+
     '</div>';
   }).join("");
+}
+
+function renderStats(){
+  var conf = bookings.filter(function(b){return b.status==="confirmed";});
+  var vocal = conf.filter(function(b){return b.direction==="вокал";}).length;
+  var piano = conf.filter(function(b){return b.direction==="фортепиано";}).length;
+  $("#stats").innerHTML =
+    '<div class="stat"><span class="si"><span class="material-symbols-outlined">mic</span></span>'+
+      '<div><div class="sv">'+vocal+'</div><div class="sl">Вокал</div></div></div>'+
+    '<div class="stat"><span class="si"><span class="material-symbols-outlined">piano</span></span>'+
+      '<div><div class="sv">'+piano+'</div><div class="sl">Фортепиано</div></div></div>';
 }
 
 function renderSlots(){
@@ -379,8 +408,8 @@ window.openSheet=function(id){
     '<div class="contacts">'+
       cbtn(phoneClean?("tel:"+phoneClean):null,"call","Звонок")+
       cbtn(phoneClean?("sms:"+phoneClean):null,"sms","iMessage")+
-      cbtn(tg?("https://t.me/"+tg):null,"send","Telegram")+
-      cbtn(waNum?("https://wa.me/"+waNum):null,"chat","WhatsApp")+
+      cbtn(tg?("tg://resolve?domain="+tg):null,"send","Telegram")+
+      cbtn(waNum?("whatsapp://send?phone="+waNum):null,"chat","WhatsApp")+
     '</div>'+
     '<div class="info">'+
       row("Телефон", b.phone||"—")+
@@ -393,7 +422,8 @@ window.openSheet=function(id){
     '<div class="sheet-actions">'+
       (b.status!=="confirmed"?'<button class="btn primary" onclick="setStatus(\''+b.id+'\',\'confirmed\')"><span class="material-symbols-outlined">check</span>Подтвердить</button>':'')+
       (b.status!=="cancelled"?'<button class="btn danger" onclick="setStatus(\''+b.id+'\',\'cancelled\')"><span class="material-symbols-outlined">close</span>Отменить</button>':'')+
-    '</div>';
+    '</div>'+
+    '<button class="btn danger block" style="margin-top:10px;" onclick="delBooking(\''+b.id+'\')"><span class="material-symbols-outlined">delete</span>Удалить запись</button>';
   $("#sheetBody").innerHTML=c;
   $("#sheetBack").classList.add("show"); $("#sheet").classList.add("show");
 };
@@ -402,23 +432,36 @@ $("#sheetBack").onclick=closeSheet;
 
 /* свайп вниз для закрытия модалки */
 (function(){
-  var sheet=$("#sheet"), startY=0, curY=0, dragging=false;
-  sheet.addEventListener("touchstart",function(e){
-    // начинаем тянуть только если контент прокручен в самый верх
-    if(sheet.scrollTop>0){ dragging=false; return; }
-    dragging=true; startY=e.touches[0].clientY; curY=startY; sheet.style.transition="none";
+  var sheet=$("#sheet"), startY=null, dy=0;
+  function start(y){ if(sheet.scrollTop>0){ startY=null; return; } startY=y; dy=0; sheet.style.transition="none"; }
+  function move(y){ if(startY===null) return; dy=y-startY; if(dy<0) dy=0; sheet.style.transform="translateY("+dy+"px)"; }
+  function end(){ if(startY===null) return; sheet.style.transition=""; if(dy>90){ closeSheet(); } else { sheet.style.transform=""; } startY=null; dy=0; }
+  sheet.addEventListener("touchstart",function(e){ start(e.touches[0].clientY); },{passive:true});
+  sheet.addEventListener("touchmove",function(e){ move(e.touches[0].clientY); },{passive:true});
+  sheet.addEventListener("touchend",end);
+  sheet.addEventListener("touchcancel",end);
+})();
+
+/* pull-to-refresh ленты заявок */
+(function(){
+  var ind=$("#pullInd"), startY=null, dy=0;
+  window.addEventListener("touchstart",function(e){
+    if(window.scrollY<=0 && $("#app").style.display!=="none" && !$("#sheet").classList.contains("show")){
+      startY=e.touches[0].clientY; dy=0;
+    } else startY=null;
   },{passive:true});
-  sheet.addEventListener("touchmove",function(e){
-    if(!dragging) return;
-    curY=e.touches[0].clientY;
-    var dy=curY-startY;
-    if(dy>0) sheet.style.transform="translateY("+dy+"px)";
+  window.addEventListener("touchmove",function(e){
+    if(startY===null) return;
+    dy=e.touches[0].clientY-startY;
+    if(dy>0){ var h=Math.min(dy*0.5,64); ind.style.height=h+"px"; ind.style.opacity=Math.min(h/56,1); }
   },{passive:true});
-  sheet.addEventListener("touchend",function(){
-    if(!dragging) return;
-    dragging=false; sheet.style.transition="";
-    if(curY-startY>110){ closeSheet(); }
-    else { sheet.style.transform=""; }
+  window.addEventListener("touchend",function(){
+    if(startY===null) return;
+    var pulled=dy>110;
+    startY=null; dy=0;
+    if(pulled){ ind.style.height="44px"; ind.style.opacity="1"; startListeners(); toast("Обновлено");
+      setTimeout(function(){ ind.style.height="0px"; ind.style.opacity="0"; },700);
+    } else { ind.style.height="0px"; ind.style.opacity="0"; }
   });
 })();
 
@@ -434,6 +477,19 @@ window.setStatus=function(id,status){
     toast(status==="confirmed"?"Бронь подтверждена":"Бронь отменена");
     closeSheet();
   }).catch(function(e){ toast("Ошибка: "+e.message); });
+};
+
+window.delBooking=function(id){
+  var b=bookings.find(function(x){return x.id===id;}); if(!b) return;
+  if(!confirm("Удалить запись безвозвратно?")) return;
+  var batch=db.batch();
+  batch.delete(db.collection("bookings").doc(id));
+  // если слот существует и был занят этой бронью — освобождаем
+  if(b.slotId && slots.find(function(s){return s.id===b.slotId;})){
+    batch.update(db.collection("slots").doc(b.slotId),{status:"free"});
+  }
+  batch.commit().then(function(){ toast("Запись удалена"); closeSheet(); })
+    .catch(function(e){ toast("Ошибка: "+e.message); });
 };
 
 /* ---------- PUSH NOTIFICATIONS ---------- */
@@ -474,7 +530,8 @@ function registerFcmToken(){
 /* ---------- helpers ---------- */
 function cbtn(href,icon,lbl){
   if(!href) return '<a class="cbtn off"><span class="material-symbols-outlined">'+icon+'</span><span class="lbl">'+lbl+'</span></a>';
-  return '<a class="cbtn" href="'+href+'" target="_blank" rel="noopener"><span class="material-symbols-outlined">'+icon+'</span><span class="lbl">'+lbl+'</span></a>';
+  // без target=_blank: app-схемы (tel/sms/tg/whatsapp) открывают приложение напрямую, без пустой вкладки
+  return '<a class="cbtn" href="'+href+'" rel="noopener"><span class="material-symbols-outlined">'+icon+'</span><span class="lbl">'+lbl+'</span></a>';
 }
 function row(k,v){ return '<div class="r"><span class="k">'+k+'</span><span class="v">'+esc(v)+'</span></div>'; }
 function statusLbl(s){ return s==="pending"?"Новая":s==="confirmed"?"Подтверждена":"Отменена"; }
