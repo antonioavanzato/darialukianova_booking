@@ -25,7 +25,9 @@ body{font-family:"Inter",-apple-system,BlinkMacSystemFont,"SF Pro Display","Helv
   -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;letter-spacing:-.005em;
   padding-bottom:env(safe-area-inset-bottom);}
 .material-symbols-outlined{font-family:"Material Symbols Outlined";font-weight:normal;font-style:normal;
-  line-height:1;text-transform:none;display:inline-block;white-space:nowrap;direction:ltr;
+  line-height:1;text-transform:none;display:inline-block;white-space:nowrap;direction:ltr;letter-spacing:normal;
+  font-feature-settings:'liga';-webkit-font-feature-settings:'liga';font-variant-ligatures:normal;
+  -webkit-font-smoothing:antialiased;
   font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;}
 h1,h2,h3{margin:0;font-weight:200;letter-spacing:-.025em;}
 button{font:inherit;cursor:pointer;}
@@ -110,6 +112,14 @@ input,select{font:inherit;}
   min-height:48px;-webkit-appearance:none;appearance:none;text-align:left;}
 .slot-form input[type=date],.slot-form input[type=time]{display:block;line-height:1.2;}
 .slot-form input::-webkit-date-and-time-value{text-align:left;color:var(--ink);}
+.slot-form input::-webkit-datetime-edit,
+.slot-form input::-webkit-datetime-edit-fields-wrapper,
+.slot-form input::-webkit-datetime-edit-text,
+.slot-form input::-webkit-datetime-edit-hour-field,
+.slot-form input::-webkit-datetime-edit-minute-field,
+.slot-form input::-webkit-datetime-edit-day-field,
+.slot-form input::-webkit-datetime-edit-month-field,
+.slot-form input::-webkit-datetime-edit-year-field{color:var(--ink);-webkit-text-fill-color:var(--ink);}
 .slot-form input:focus,.slot-form select:focus{outline:none;border-color:var(--ink);}
 .slot-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--white);
   border:1px solid var(--line-10);border-radius:18px;padding:14px 16px;margin-bottom:10px;}
@@ -381,9 +391,10 @@ function renderSlots(){
 }
 
 /* ---------- ADD / DELETE SLOT ---------- */
-(function(){ // дата по умолчанию — сегодня
+(function(){ // дата — сегодня, время — по умолчанию, чтобы поля не были пустыми
   var d=new Date(), p=function(n){return n<10?"0"+n:n;};
   $("#sfDate").value=d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
+  $("#sfTime").value="12:00";
 })();
 $("#addSlotBtn").onclick=function(){
   var date=$("#sfDate").value, time=$("#sfTime").value;
