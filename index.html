@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#1d1d1f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Записи">
+<title>Дарья · Записи</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --ink:#1d1d1f;--ink-80:rgba(29,29,31,.8);--gray:#86868b;--white:#fff;
+  --stone-50:#fafaf9;--stone-100:#f5f5f4;--stone-200:#e7e5e4;
+  --line-5:rgba(29,29,31,.05);--line-10:rgba(29,29,31,.10);--line-20:rgba(29,29,31,.20);
+  --green:#1a7f37;--red:#b42318;--r:26px;--ease:cubic-bezier(.22,.61,.21,1);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{font-family:"Inter",-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",sans-serif;
+  color:var(--ink);background:var(--stone-50);font-weight:300;line-height:1.5;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;letter-spacing:-.005em;
+  padding-bottom:env(safe-area-inset-bottom);}
+.material-symbols-outlined{font-family:"Material Symbols Outlined";font-weight:normal;font-style:normal;
+  line-height:1;text-transform:none;display:inline-block;white-space:nowrap;direction:ltr;
+  font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;}
+h1,h2,h3{margin:0;font-weight:200;letter-spacing:-.025em;}
+button{font:inherit;cursor:pointer;}
+input,select{font:inherit;}
+
+/* ---------- LOGIN ---------- */
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+.login-card{width:100%;max-width:380px;background:var(--white);border:1px solid var(--line-10);
+  border-radius:34px;padding:38px 30px;box-shadow:0 30px 60px -40px rgba(0,0,0,.3);}
+.login-card .eyebrow{font-size:10px;font-weight:500;letter-spacing:.5em;text-transform:uppercase;color:var(--gray);}
+.login-card h1{font-size:28px;font-weight:300;margin:14px 0 26px;}
+.fld{margin-bottom:14px;}
+.fld label{display:block;font-size:12px;font-weight:500;color:var(--gray);margin-bottom:7px;}
+.fld input{width:100%;border:1px solid var(--line-10);border-radius:16px;background:var(--white);
+  padding:14px 16px;font-size:15px;transition:.3s var(--ease);}
+.fld input:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 4px rgba(29,29,31,.06);}
+.btn{position:relative;overflow:hidden;isolation:isolate;display:inline-flex;align-items:center;
+  justify-content:center;gap:8px;padding:14px 24px;border-radius:999px;border:1px solid var(--line-20);
+  font-size:14px;font-weight:500;color:var(--ink);background:transparent;transition:.45s var(--ease);}
+.btn::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--ink);transform:translateX(-101%);transition:transform .45s var(--ease);}
+.btn.primary{color:var(--white);border-color:var(--ink);}
+.btn.primary::before{transform:translateX(0);}
+.btn.primary:active{transform:scale(.98);}
+.btn.block{width:100%;}
+.btn:disabled{opacity:.45;}
+.login-err{color:var(--red);font-size:13px;margin-top:12px;min-height:18px;}
+
+/* ---------- APP ---------- */
+.app{display:none;max-width:680px;margin:0 auto;padding:0 16px;}
+.topbar{position:sticky;top:0;z-index:30;background:rgba(250,250,249,.82);backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);padding:calc(env(safe-area-inset-top) + 14px) 4px 12px;
+  display:flex;align-items:center;justify-content:space-between;}
+.topbar h1{font-size:24px;font-weight:300;}
+.topbar .sub{font-size:11px;letter-spacing:.4em;text-transform:uppercase;color:var(--gray);}
+.icon-btn{width:42px;height:42px;border-radius:999px;border:1px solid var(--line-10);background:var(--white);
+  display:flex;align-items:center;justify-content:center;color:var(--ink);}
+.icon-btn .material-symbols-outlined{font-size:20px;}
+.icon-btn.alert{border-color:var(--ink);}
+
+.tabs{display:flex;gap:8px;background:var(--white);border:1px solid var(--line-10);border-radius:999px;
+  padding:5px;margin:6px 0 18px;position:sticky;top:64px;z-index:20;}
+.tab{flex:1;border:none;background:transparent;border-radius:999px;padding:11px;font-size:14px;
+  font-weight:500;color:var(--gray);position:relative;transition:.35s var(--ease);}
+.tab .badge{position:absolute;top:6px;right:14px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;
+  background:var(--ink);color:#fff;font-size:11px;display:none;align-items:center;justify-content:center;}
+.tab.on{background:var(--ink);color:#fff;}
+.tab.on .badge{background:#fff;color:var(--ink);}
+
+.view{display:none;}
+.view.on{display:block;animation:fade .4s var(--ease);}
+@keyframes fade{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+
+.secttl{font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--gray);
+  margin:22px 4px 12px;}
+
+/* booking card */
+.bcard{background:var(--white);border:1px solid var(--line-10);border-radius:var(--r);padding:18px;
+  margin-bottom:12px;transition:.35s var(--ease);}
+.bcard:active{transform:scale(.99);}
+.bcard.pending{border-color:var(--ink);}
+.bcard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+.bcard .nm{font-size:18px;font-weight:500;}
+.bcard .meta{font-size:13px;color:var(--gray);margin-top:3px;}
+.pill{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:5px 10px;
+  border-radius:999px;white-space:nowrap;}
+.pill.pending{background:var(--ink);color:#fff;}
+.pill.confirmed{background:rgba(26,127,55,.12);color:var(--green);}
+.pill.cancelled{background:var(--stone-100);color:var(--gray);}
+.bcard .when{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px;color:var(--ink-80);}
+.bcard .when .material-symbols-outlined{font-size:18px;color:var(--gray);}
+.bcard .pkg{margin-top:6px;font-size:13px;color:var(--gray);}
+
+.empty{text-align:center;padding:48px 20px;color:var(--gray);}
+.empty .material-symbols-outlined{font-size:42px;opacity:.4;display:block;margin-bottom:10px;}
+
+/* slots */
+.slot-form{background:var(--white);border:1px solid var(--line-10);border-radius:var(--r);padding:18px;margin-bottom:18px;}
+.slot-form .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.slot-form .row3{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+.slot-form input,.slot-form select{width:100%;border:1px solid var(--line-10);border-radius:14px;
+  padding:12px 14px;font-size:15px;background:var(--white);}
+.slot-form input:focus,.slot-form select:focus{outline:none;border-color:var(--ink);}
+.slot-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--white);
+  border:1px solid var(--line-10);border-radius:18px;padding:14px 16px;margin-bottom:10px;}
+.slot-row.booked{opacity:.55;}
+.slot-row .d{font-size:15px;}
+.slot-row .t{font-size:13px;color:var(--gray);margin-top:2px;}
+.slot-del{width:36px;height:36px;border-radius:999px;border:1px solid var(--line-10);background:var(--white);
+  display:flex;align-items:center;justify-content:center;color:var(--red);}
+.slot-del .material-symbols-outlined{font-size:18px;}
+
+/* ---------- MODAL ---------- */
+.sheet-back{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.4);opacity:0;pointer-events:none;
+  transition:opacity .4s var(--ease);backdrop-filter:blur(3px);}
+.sheet-back.show{opacity:1;pointer-events:auto;}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:51;background:var(--white);
+  border-radius:32px 32px 0 0;padding:8px 20px calc(env(safe-area-inset-bottom) + 24px);
+  max-height:92vh;overflow-y:auto;transform:translateY(101%);transition:transform .5s var(--ease);
+  max-width:680px;margin:0 auto;box-shadow:0 -20px 50px -30px rgba(0,0,0,.4);}
+.sheet.show{transform:translateY(0);}
+.sheet .grab{width:42px;height:5px;border-radius:999px;background:var(--line-20);margin:8px auto 18px;}
+.sheet h2{font-size:24px;font-weight:400;}
+.sheet .sub{color:var(--gray);font-size:14px;margin-top:4px;}
+.info{margin:18px 0;border-top:1px solid var(--line-10);}
+.info .r{display:flex;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid var(--line-10);font-size:15px;}
+.info .r .k{color:var(--gray);}
+.info .r .v{text-align:right;font-weight:400;}
+.info .comment{background:var(--stone-50);border-radius:18px;padding:14px 16px;margin-top:14px;font-size:14px;
+  color:var(--ink-80);line-height:1.6;white-space:pre-wrap;}
+.contacts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0;}
+.cbtn{display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 4px;border-radius:20px;
+  border:1px solid var(--line-10);background:var(--white);color:var(--ink);text-decoration:none;transition:.3s var(--ease);}
+.cbtn:active{transform:scale(.95);}
+.cbtn .material-symbols-outlined{font-size:24px;}
+.cbtn span.lbl{font-size:11px;color:var(--gray);}
+.cbtn.off{opacity:.35;pointer-events:none;}
+.sheet-actions{display:flex;gap:10px;margin-top:8px;}
+.sheet-actions .btn{flex:1;}
+.btn.danger{color:var(--red);border-color:rgba(180,35,24,.3);}
+.btn.danger::before{background:var(--red);}
+.btn.danger:active{color:#fff;}
+.btn.danger:active::before{transform:translateX(0);}
+
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translate(-50%,20px);
+  background:var(--ink);color:#fff;padding:13px 22px;border-radius:999px;font-size:14px;z-index:60;
+  opacity:0;pointer-events:none;transition:.4s var(--ease);}
+.toast.show{opacity:1;transform:translate(-50%,0);}
+.spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;
+  border-radius:999px;animation:sp .7s linear infinite;}
+@keyframes sp{to{transform:rotate(360deg);}}
+.notif-banner{background:var(--white);border:1px solid var(--ink);border-radius:20px;padding:14px 16px;
+  margin-bottom:14px;display:flex;align-items:center;gap:12px;font-size:13px;}
+.notif-banner .material-symbols-outlined{font-size:22px;}
+.notif-banner .btn{padding:9px 16px;font-size:13px;margin-left:auto;}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div class="login" id="loginScreen">
+  <div class="login-card">
+    <span class="eyebrow">Админка · Дарья</span>
+    <h1>Вход</h1>
+    <div class="fld"><label>Email</label><input id="email" type="email" autocomplete="username" placeholder="вы@почта.ру"></div>
+    <div class="fld"><label>Пароль</label><input id="password" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+    <button class="btn primary block" id="loginBtn">Войти</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ===== APP ===== -->
+<div class="app" id="app">
+  <div class="topbar">
+    <div><div class="sub">Записи</div><h1>Дарья</h1></div>
+    <button class="icon-btn" id="logoutBtn" title="Выйти"><span class="material-symbols-outlined">logout</span></button>
+  </div>
+
+  <div id="notifBanner"></div>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="bookings">Заявки<span class="badge" id="pendBadge">0</span></button>
+    <button class="tab" data-tab="calendar">Календарь</button>
+  </div>
+
+  <!-- BOOKINGS -->
+  <div class="view on" id="view-bookings"><div id="bookingsList"></div></div>
+
+  <!-- CALENDAR -->
+  <div class="view" id="view-calendar">
+    <div class="secttl">Добавить слот</div>
+    <div class="slot-form">
+      <div class="row">
+        <input id="sfDate" type="date">
+        <input id="sfTime" type="time">
+      </div>
+      <div class="row3">
+        <select id="sfDir"><option value="вокал">Вокал</option><option value="фортепиано">Фортепиано</option><option value="сольфеджио">Сольфеджио</option></select>
+        <select id="sfDur"><option value="45">45 мин</option><option value="60" selected>60 мин</option><option value="90">90 мин</option></select>
+      </div>
+      <button class="btn primary block" id="addSlotBtn" style="margin-top:12px;"><span class="material-symbols-outlined">add</span>Добавить</button>
+    </div>
+    <div class="secttl">Свободные и занятые слоты</div>
+    <div id="slotsList"></div>
+  </div>
+</div>
+
+<!-- ===== CLIENT SHEET ===== -->
+<div class="sheet-back" id="sheetBack"></div>
+<div class="sheet" id="sheet">
+  <div class="grab"></div>
+  <div id="sheetBody"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+<script>
+/* ===================================================================
+   ⬇⬇⬇  ЗАПОЛНИТЬ ПЕРЕД ДЕПЛОЕМ  ⬇⬇⬇
+   =================================================================== */
+var FIREBASE_CONFIG = {
+  apiKey: "ВСТАВЬТЕ_apiKey",
+  authDomain: "ВСТАВЬТЕ.firebaseapp.com",
+  projectId: "ВСТАВЬТЕ_projectId",
+  storageBucket: "ВСТАВЬТЕ.appspot.com",
+  messagingSenderId: "ВСТАВЬТЕ",
+  appId: "ВСТАВЬТЕ_appId"
+};
+// Ключ Web Push (Firebase → Cloud Messaging → Web configuration → Generate key pair)
+var VAPID_KEY = "ВСТАВЬТЕ_VAPID_KEY";
+/* ===================================================================
+   ⬆⬆⬆  КОНЕЦ НАСТРОЕК  ⬆⬆⬆
+   =================================================================== */
+
+firebase.initializeApp(FIREBASE_CONFIG);
+var auth = firebase.auth();
+var db = firebase.firestore();
+var messaging = null;
+try { messaging = firebase.messaging(); } catch(e){ console.warn("FCM недоступен в этом браузере", e); }
+
+var DOW=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+var MON=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
+var $=function(s){return document.querySelector(s);};
+var bookings=[], slots=[], unsubB=null, unsubS=null, current=null;
+
+/* ---------- регистрация service worker'ов ---------- */
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("./service-worker.js").catch(function(e){console.warn("SW",e);});
+}
+
+/* ---------- AUTH ---------- */
+$("#loginBtn").onclick=function(){
+  var btn=this, e=$("#email").value.trim(), p=$("#password").value;
+  $("#loginErr").textContent="";
+  btn.disabled=true; var o=btn.innerHTML; btn.innerHTML='<span class="spin"></span>';
+  auth.signInWithEmailAndPassword(e,p).catch(function(err){
+    btn.disabled=false; btn.innerHTML=o;
+    $("#loginErr").textContent = err.code==="auth/invalid-credential" ? "Неверный email или пароль" : err.message;
+  });
+};
+$("#password").addEventListener("keydown",function(ev){ if(ev.key==="Enter") $("#loginBtn").click(); });
+$("#logoutBtn").onclick=function(){ if(confirm("Выйти из админки?")) auth.signOut(); };
+
+auth.onAuthStateChanged(function(user){
+  if(user){
+    $("#loginScreen").style.display="none";
+    $("#app").style.display="block";
+    startListeners();
+    setupNotifications();
+  } else {
+    $("#loginScreen").style.display="flex";
+    $("#app").style.display="none";
+    if(unsubB) unsubB(); if(unsubS) unsubS();
+  }
+});
+
+/* ---------- TABS ---------- */
+document.querySelectorAll(".tab").forEach(function(t){
+  t.onclick=function(){
+    document.querySelectorAll(".tab").forEach(function(x){x.classList.remove("on");});
+    document.querySelectorAll(".view").forEach(function(x){x.classList.remove("on");});
+    t.classList.add("on");
+    $("#view-"+t.dataset.tab).classList.add("on");
+  };
+});
+
+/* ---------- LIVE DATA ---------- */
+function startListeners(){
+  if(unsubB) unsubB();
+  unsubB = db.collection("bookings").orderBy("createdAt","desc").onSnapshot(function(snap){
+    bookings=[]; snap.forEach(function(d){ var b=d.data(); b.id=d.id; bookings.push(b); });
+    renderBookings();
+  }, function(e){ console.error(e); });
+
+  if(unsubS) unsubS();
+  unsubS = db.collection("slots").onSnapshot(function(snap){
+    slots=[]; snap.forEach(function(d){ var s=d.data(); s.id=d.id; slots.push(s); });
+    slots.sort(function(a,b){ return (a.date+a.time)<(b.date+b.time)?-1:1; });
+    renderSlots();
+  }, function(e){ console.error(e); });
+}
+
+function renderBookings(){
+  var pend = bookings.filter(function(b){return b.status==="pending";});
+  var badge=$("#pendBadge");
+  badge.textContent=pend.length; badge.style.display = pend.length ? "flex" : "none";
+  $("#logoutBtn").classList.toggle("alert", pend.length>0);
+
+  var el=$("#bookingsList");
+  if(!bookings.length){ el.innerHTML='<div class="empty"><span class="material-symbols-outlined">inbox</span>Заявок пока нет</div>'; return; }
+  // pending сверху
+  var sorted=bookings.slice().sort(function(a,b){
+    var rank={pending:0,confirmed:1,cancelled:2};
+    return (rank[a.status]-rank[b.status]);
+  });
+  el.innerHTML = sorted.map(function(b){
+    return '<div class="bcard '+(b.status==="pending"?"pending":"")+'" onclick="openSheet(\''+b.id+'\')">'+
+      '<div class="top"><div><div class="nm">'+esc(b.name)+'</div>'+
+      '<div class="meta">'+cap(b.direction||"")+(b.telegram?' · '+esc(b.telegram):'')+'</div></div>'+
+      '<span class="pill '+b.status+'">'+statusLbl(b.status)+'</span></div>'+
+      '<div class="when"><span class="material-symbols-outlined">event</span>'+fmtSlot(b)+'</div>'+
+      '<div class="pkg">'+esc(b.packageTitle||"")+(b.packagePrice?' — '+fmtPrice(b.packagePrice):'')+'</div>'+
+    '</div>';
+  }).join("");
+}
+
+function renderSlots(){
+  var el=$("#slotsList");
+  if(!slots.length){ el.innerHTML='<div class="empty"><span class="material-symbols-outlined">event_busy</span>Слотов нет</div>'; return; }
+  el.innerHTML = slots.map(function(s){
+    var dt=parseDate(s.date);
+    return '<div class="slot-row '+(s.status==="booked"?"booked":"")+'">'+
+      '<div><div class="d">'+DOW[dt.getDay()]+', '+dt.getDate()+' '+MON[dt.getMonth()]+' · '+s.time+'</div>'+
+      '<div class="t">'+cap(s.direction)+' · '+(s.durationMin||60)+' мин · '+(s.status==="booked"?"занят":"свободен")+'</div></div>'+
+      (s.status==="booked"?'':'<button class="slot-del" onclick="delSlot(\''+s.id+'\')"><span class="material-symbols-outlined">delete</span></button>')+
+    '</div>';
+  }).join("");
+}
+
+/* ---------- ADD / DELETE SLOT ---------- */
+$("#addSlotBtn").onclick=function(){
+  var date=$("#sfDate").value, time=$("#sfTime").value;
+  if(!date||!time) return toast("Укажите дату и время");
+  var btn=this; btn.disabled=true;
+  db.collection("slots").add({
+    date:date, time:time, direction:$("#sfDir").value,
+    durationMin:Number($("#sfDur").value), status:"free",
+    createdAt:firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){ $("#sfTime").value=""; toast("Слот добавлен"); })
+    .catch(function(e){ toast("Ошибка: "+e.message); })
+    .finally(function(){ btn.disabled=false; });
+};
+window.delSlot=function(id){
+  if(!confirm("Удалить слот?")) return;
+  db.collection("slots").doc(id).delete().then(function(){toast("Слот удалён");});
+};
+
+/* ---------- CLIENT SHEET ---------- */
+window.openSheet=function(id){
+  var b=bookings.find(function(x){return x.id===id;}); if(!b) return;
+  current=b;
+  var phoneClean=(b.phone||"").replace(/[^\d+]/g,"");
+  var waNum=phoneClean.replace(/[^\d]/g,"");
+  var tg=(b.telegram||"").replace(/^@/,"");
+  var c='<h2>'+esc(b.name)+'</h2><div class="sub">'+cap(b.direction||"")+' · '+statusLbl(b.status)+'</div>'+
+    '<div class="contacts">'+
+      cbtn(phoneClean?("tel:"+phoneClean):null,"call","Звонок")+
+      cbtn(phoneClean?("sms:"+phoneClean):null,"sms","iMessage")+
+      cbtn(tg?("https://t.me/"+tg):null,"send","Telegram")+
+      cbtn(waNum?("https://wa.me/"+waNum):null,"chat","WhatsApp")+
+    '</div>'+
+    '<div class="info">'+
+      row("Телефон", b.phone||"—")+
+      row("Telegram", b.telegram||"—")+
+      row("Направление", cap(b.direction||"—"))+
+      row("Дата и время", fmtSlot(b))+
+      row("Пакет", b.packageTitle||"—")+
+      row("Стоимость", b.packagePrice?fmtPrice(b.packagePrice):"—")+
+      row("Создана", fmtDate(b.createdAt))+
+    '</div>'+
+    (b.comment?'<div class="secttl" style="margin-left:0;">Комментарий клиента</div><div class="comment">'+esc(b.comment)+'</div>':'')+
+    '<div class="sheet-actions">'+
+      (b.status!=="confirmed"?'<button class="btn primary" onclick="setStatus(\''+b.id+'\',\'confirmed\')"><span class="material-symbols-outlined">check</span>Подтвердить</button>':'')+
+      (b.status!=="cancelled"?'<button class="btn danger" onclick="setStatus(\''+b.id+'\',\'cancelled\')"><span class="material-symbols-outlined">close</span>Отменить</button>':'')+
+    '</div>';
+  $("#sheetBody").innerHTML=c;
+  $("#sheetBack").classList.add("show"); $("#sheet").classList.add("show");
+};
+function closeSheet(){ $("#sheetBack").classList.remove("show"); $("#sheet").classList.remove("show"); }
+$("#sheetBack").onclick=closeSheet;
+
+window.setStatus=function(id,status){
+  var b=bookings.find(function(x){return x.id===id;}); if(!b) return;
+  var batch=db.batch();
+  batch.update(db.collection("bookings").doc(id),{status:status});
+  // синхронизация слота: подтверждение → booked, отмена → free
+  if(b.slotId){
+    batch.update(db.collection("slots").doc(b.slotId),{status: status==="confirmed"?"booked":"free"});
+  }
+  batch.commit().then(function(){
+    toast(status==="confirmed"?"Бронь подтверждена":"Бронь отменена");
+    closeSheet();
+  }).catch(function(e){ toast("Ошибка: "+e.message); });
+};
+
+/* ---------- PUSH NOTIFICATIONS ---------- */
+function setupNotifications(){
+  var banner=$("#notifBanner"); banner.innerHTML="";
+  if(!messaging || !("Notification" in window)) return;
+  if(Notification.permission==="granted"){ registerFcmToken(); return; }
+  if(Notification.permission==="denied") return;
+  banner.innerHTML='<div class="notif-banner"><span class="material-symbols-outlined">notifications</span>'+
+    'Включите уведомления о новых заявках'+
+    '<button class="btn primary" id="enableNotif">Включить</button></div>';
+  $("#enableNotif").onclick=function(){
+    Notification.requestPermission().then(function(p){
+      if(p==="granted"){ registerFcmToken(); banner.innerHTML=""; toast("Уведомления включены"); }
+    });
+  };
+}
+function registerFcmToken(){
+  if(!messaging) return;
+  navigator.serviceWorker.register("./firebase-messaging-sw.js").then(function(reg){
+    return messaging.getToken({vapidKey:VAPID_KEY, serviceWorkerRegistration:reg});
+  }).then(function(token){
+    if(!token) return;
+    // сохраняем токен устройства, чтобы сервер/Apps Script мог слать push
+    return db.collection("config").doc("admin").set({
+      fcmTokens: firebase.firestore.FieldValue.arrayUnion(token)
+    },{merge:true});
+  }).catch(function(e){ console.warn("FCM token", e); });
+
+  // foreground-сообщения (PWA открыта)
+  messaging.onMessage(function(payload){
+    var n=(payload&&payload.notification)||{};
+    toast(n.title||"Новая заявка");
+    try{ new Notification(n.title||"Новая заявка",{body:n.body||"",icon:"./icons/icon-192.png"}); }catch(e){}
+  });
+}
+
+/* ---------- helpers ---------- */
+function cbtn(href,icon,lbl){
+  if(!href) return '<a class="cbtn off"><span class="material-symbols-outlined">'+icon+'</span><span class="lbl">'+lbl+'</span></a>';
+  return '<a class="cbtn" href="'+href+'" target="_blank" rel="noopener"><span class="material-symbols-outlined">'+icon+'</span><span class="lbl">'+lbl+'</span></a>';
+}
+function row(k,v){ return '<div class="r"><span class="k">'+k+'</span><span class="v">'+esc(v)+'</span></div>'; }
+function statusLbl(s){ return s==="pending"?"Новая":s==="confirmed"?"Подтверждена":"Отменена"; }
+function fmtSlot(b){
+  if(b.slotDate){ var d=parseDate(b.slotDate); return DOW[d.getDay()]+', '+d.getDate()+' '+MON[d.getMonth()]+' · '+(b.slotTime||''); }
+  return "—";
+}
+function parseDate(s){ var p=String(s).split("-"); return new Date(+p[0],(+p[1]-1),+p[2]); }
+function fmtDate(ts){ if(!ts||!ts.toDate) return "—"; var d=ts.toDate(); return d.getDate()+' '+MON[d.getMonth()]+', '+pad(d.getHours())+':'+pad(d.getMinutes()); }
+function fmtPrice(n){ return Number(n).toLocaleString("ru-RU")+" ₽"; }
+function pad(n){ return n<10?"0"+n:n; }
+function cap(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):s; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+var toastT;
+function toast(msg){ var t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(function(){t.classList.remove("show");},2600); }
+</script>
+</body>
+</html>
