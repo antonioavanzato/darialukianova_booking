@@ -509,15 +509,16 @@ function setupNotifications(){
 }
 function registerFcmToken(){
   if(!messaging) return;
-  navigator.serviceWorker.register("./firebase-messaging-sw.js").then(function(reg){
+  // отдельный scope, чтобы не конфликтовать с кэширующим service-worker.js (scope "./")
+  navigator.serviceWorker.register("./firebase-messaging-sw.js",{scope:"./fcm/"}).then(function(reg){
     return messaging.getToken({vapidKey:VAPID_KEY, serviceWorkerRegistration:reg});
   }).then(function(token){
-    if(!token) return;
-    // сохраняем токен устройства, чтобы сервер/Apps Script мог слать push
+    if(!token){ toast("Не удалось получить токен уведомлений"); return; }
+    // сохраняем токен устройства, чтобы Apps Script мог слать push
     return db.collection("config").doc("admin").set({
       fcmTokens: firebase.firestore.FieldValue.arrayUnion(token)
-    },{merge:true});
-  }).catch(function(e){ console.warn("FCM token", e); });
+    },{merge:true}).then(function(){ toast("Уведомления подключены"); });
+  }).catch(function(e){ console.warn("FCM token", e); toast("Ошибка уведомлений: "+(e&&e.message?e.message:e)); });
 
   // foreground-сообщения (PWA открыта)
   messaging.onMessage(function(payload){
