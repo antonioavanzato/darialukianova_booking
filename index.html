@@ -108,7 +108,10 @@ input,select{font:inherit;}
 .slot-form .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .slot-form .row3{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
 .slot-form input,.slot-form select{width:100%;border:1px solid var(--line-10);border-radius:14px;
-  padding:12px 14px;font-size:15px;background:var(--white);}
+  padding:12px 14px;font-size:15px;background:var(--white);color:var(--ink);-webkit-text-fill-color:var(--ink);
+  min-height:48px;-webkit-appearance:none;appearance:none;text-align:left;}
+.slot-form input[type=date],.slot-form input[type=time]{display:block;line-height:1.2;}
+.slot-form input::-webkit-date-and-time-value{text-align:left;color:var(--ink);}
 .slot-form input:focus,.slot-form select:focus{outline:none;border-color:var(--ink);}
 .slot-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--white);
   border:1px solid var(--line-10);border-radius:18px;padding:14px 16px;margin-bottom:10px;}
@@ -380,6 +383,10 @@ function renderSlots(){
 }
 
 /* ---------- ADD / DELETE SLOT ---------- */
+(function(){ // дата по умолчанию — сегодня
+  var d=new Date(), p=function(n){return n<10?"0"+n:n;};
+  $("#sfDate").value=d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
+})();
 $("#addSlotBtn").onclick=function(){
   var date=$("#sfDate").value, time=$("#sfTime").value;
   if(!date||!time) return toast("Укажите дату и время");
