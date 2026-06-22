@@ -282,7 +282,7 @@ try { messaging = firebase.messaging(); } catch(e){ console.warn("FCM недос
 var DOW=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
 var MON=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
 var $=function(s){return document.querySelector(s);};
-var bookings=[], slots=[], unsubB=null, unsubS=null, current=null;
+var bookings=[], slots=[], unsubB=null, unsubS=null, current=null, onMsgBound=false;
 
 /* ---------- регистрация service worker'ов ---------- */
 if("serviceWorker" in navigator){
@@ -391,9 +391,10 @@ function renderSlots(){
 }
 
 /* ---------- ADD / DELETE SLOT ---------- */
-(function(){ // дата — сегодня, время — по умолчанию, чтобы поля не были пустыми
+(function(){ // дата — сегодня (и не раньше), время — по умолчанию, чтобы поля не были пустыми
   var d=new Date(), p=function(n){return n<10?"0"+n:n;};
-  $("#sfDate").value=d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
+  var today=d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
+  $("#sfDate").value=today; $("#sfDate").min=today;
   $("#sfTime").value="12:00";
 })();
 $("#addSlotBtn").onclick=function(){
@@ -404,7 +405,7 @@ $("#addSlotBtn").onclick=function(){
     date:date, time:time, direction:$("#sfDir").value,
     durationMin:Number($("#sfDur").value), status:"free",
     createdAt:firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function(){ $("#sfTime").value=""; toast("Слот добавлен"); })
+  }).then(function(){ toast("Слот добавлен"); })
     .catch(function(e){ toast("Ошибка: "+e.message); })
     .finally(function(){ btn.disabled=false; });
 };
@@ -485,8 +486,9 @@ window.setStatus=function(id,status){
   var b=bookings.find(function(x){return x.id===id;}); if(!b) return;
   var batch=db.batch();
   batch.update(db.collection("bookings").doc(id),{status:status});
-  // синхронизация слота: подтверждение → booked, отмена → free
-  if(b.slotId){
+  // синхронизация слота: подтверждение → booked, отмена → free.
+  // обновляем только если слот реально существует, иначе батч упадёт целиком
+  if(b.slotId && slots.find(function(s){return s.id===b.slotId;})){
     batch.update(db.collection("slots").doc(b.slotId),{status: status==="confirmed"?"booked":"free"});
   }
   batch.commit().then(function(){
@@ -536,12 +538,15 @@ function registerFcmToken(){
     },{merge:true}).then(function(){ toast("Уведомления подключены"); });
   }).catch(function(e){ console.warn("FCM token", e); toast("Ошибка уведомлений: "+(e&&e.message?e.message:e)); });
 
-  // foreground-сообщения (PWA открыта)
-  messaging.onMessage(function(payload){
-    var n=(payload&&payload.notification)||{};
-    toast(n.title||"Новая заявка");
-    try{ new Notification(n.title||"Новая заявка",{body:n.body||"",icon:"./icons/icon-192.png"}); }catch(e){}
-  });
+  // foreground-сообщения (PWA открыта) — навешиваем только один раз
+  if(!onMsgBound){
+    onMsgBound=true;
+    messaging.onMessage(function(payload){
+      var n=(payload&&payload.notification)||{};
+      toast(n.title||"Новая заявка");
+      try{ new Notification(n.title||"Новая заявка",{body:n.body||"",icon:"./icons/icon-192.png"}); }catch(e){}
+    });
+  }
 }
 
 /* ---------- helpers ---------- */
