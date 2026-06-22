@@ -14,7 +14,6 @@ Wfolio + админка-PWA для iPhone/iPad + уведомления в Teleg
 | `icons/` | Иконки PWA: `icon-192.png`, `icon-512.png`, `icon-512-maskable.png` | GitHub Pages |
 | `Code.gs` | Apps Script: Telegram + push | Google Apps Script (Web App) |
 | `firestore.rules` | Правила безопасности Firestore | Firebase Console |
-| `seed-packages.js` | Заполнение коллекции `packages` | запуск локально |
 
 > Форма заявки (HTML-блок) живёт **не в репозитории**, а вставлена напрямую в
 > HTML-блок на странице Wfolio.
@@ -47,48 +46,12 @@ Wfolio + админка-PWA для iPhone/iPad + уведомления в Teleg
    ключ в `VAPID_KEY` (`index.html`).
 6. **Firestore → Rules** → вставить содержимое `firestore.rules` → **Publish**.
 
-### Стартовые данные — пакеты (`packages`)
+### Стартовые данные
 
-Форма показывает активные пакеты из коллекции `packages`. Пакеты привязаны
-к направлениям через поле `directions` (массив): индивидуальные показываются
-для вокала/фортепиано/сольфеджио, групповые — каждый для своего направления
-(групповой вокал / хор / мастер-класс). Если поле `directions` отсутствует —
-пакет показывается для всех направлений.
-
-**Способ 1 — seed-скрипт (рекомендуется):**
-
-```bash
-npm install firebase-admin
-# положите рядом ключ сервис-аккаунта как service-account.json
-node seed-packages.js
-```
-
-Зальёт все пакеты разом, повторный запуск безопасно перезапишет их.
-`service-account.json` уже в `.gitignore` — не коммитьте его.
-
-**Способ 2 — вручную** в консоли Firestore, по документу на пакет
-(поля и типы): `title`(string), `price`(number), `lessonsCount`(number),
-`description`(string), `active`(boolean=true).
-
-Актуальный набор:
-
-| title | description | price | lessonsCount | directions |
-|-------|-------------|------:|:---:|---|
-| Пробное занятие | 50 минут · знакомство | 2 000 | 1 | инд. |
-| Разовое занятие | 50 минут | 2 800 | 1 | инд. |
-| Разовое занятие | 1 час 15 минут | 4 200 | 1 | инд. |
-| Разовое занятие | 1 час 40 минут | 5 200 | 1 | инд. |
-| Абонемент · 4 занятия | по 50 минут · 1 месяц | 10 400 | 4 | инд. |
-| Абонемент · 8 занятий | по 50 минут · 2 месяца | 20 000 | 8 | инд. |
-| Абонемент · 4 занятия | по 1 ч 15 мин · 1 месяц | 16 000 | 4 | инд. |
-| Абонемент · 8 занятий | по 1 ч 15 мин · 2 месяца | 31 200 | 8 | инд. |
-| Групповой вокал | 50 минут · с участника | 2 000 | 1 | групповой вокал |
-| Групповой вокал | 1 час 40 минут · с участника | 3 500 | 1 | групповой вокал |
-| Хор · разовое | 1 час 50 минут | 2 000 | 1 | хор |
-| Хор · абонемент 4 занятия | действует 30 дней | 7 400 | 4 | хор |
-| Мастер-класс | 1 час 40 минут · с участника | 3 500 | 1 | мастер-класс |
-
-> «инд.» = `["вокал","фортепиано","сольфеджио"]`. Цена групповых — **с участника**.
+Слоты (`slots`) Даша добавляет сама во вкладке «Календарь» админки —
+направление, дату, время и длительность (50 / 1 ч 15 мин / 1 ч 40 мин).
+Коллекции `bookings` и `config/admin` создаются автоматически. Пакеты/цены
+в форме не выбираются — стоимость обсуждается с клиентом отдельно.
 
 Слоты (`slots`) Даша добавляет сама во вкладке «Календарь» админки.
 Коллекции `bookings` и `config/admin` создаются автоматически.
@@ -167,10 +130,8 @@ node seed-packages.js
 
 ```
 slots/{id}      date, time, durationMin, direction, status(free|booked), createdAt
-packages/{id}   title, price, lessonsCount, description, active
-bookings/{id}   slotId, packageId, direction, name, phone, telegram, comment,
-                status(pending|confirmed|cancelled), slotDate, slotTime,
-                packageTitle, packagePrice, createdAt
+bookings/{id}   slotId, direction, name, phone, telegram, comment,
+                status(pending|confirmed|cancelled), slotDate, slotTime, createdAt
 config/admin    fcmTokens(array)
 ```
 

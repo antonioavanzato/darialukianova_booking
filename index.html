@@ -333,7 +333,6 @@ function renderBookings(){
       '<div class="meta">'+cap(b.direction||"")+(b.telegram?' · '+esc(b.telegram):'')+'</div></div>'+
       '<span class="pill '+b.status+'">'+statusLbl(b.status)+'</span></div>'+
       '<div class="when"><span class="material-symbols-outlined">event</span>'+fmtSlot(b)+'</div>'+
-      '<div class="pkg">'+esc(b.packageTitle||"")+(b.packagePrice?' — '+fmtPrice(b.packagePrice):'')+'</div>'+
     '</div>';
   }).join("");
 }
@@ -388,8 +387,6 @@ window.openSheet=function(id){
       row("Telegram", b.telegram||"—")+
       row("Направление", cap(b.direction||"—"))+
       row("Дата и время", fmtSlot(b))+
-      row("Пакет", b.packageTitle||"—")+
-      row("Стоимость", b.packagePrice?fmtPrice(b.packagePrice):"—")+
       row("Создана", fmtDate(b.createdAt))+
     '</div>'+
     (b.comment?'<div class="secttl" style="margin-left:0;">Комментарий клиента</div><div class="comment">'+esc(b.comment)+'</div>':'')+

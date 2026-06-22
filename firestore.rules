@@ -33,12 +33,6 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
-    // ---------------- ПАКЕТЫ ----------------
-    match /packages/{packageId} {
-      allow read: if true;                 // форма показывает цены
-      allow create, update, delete: if isAdmin();
-    }
-
     // ---------------- ЗАЯВКИ ----------------
     match /bookings/{bookingId} {
       // читать карточки клиентов может только Даша
@@ -55,8 +49,7 @@ service cloud.firestore {
         && request.resource.data.phone.size() < 40
         && request.resource.data.comment.size() < 2000
         && validDirection(request.resource.data.direction)
-        && request.resource.data.slotId is string
-        && request.resource.data.packageId is string;
+        && request.resource.data.slotId is string;
     }
 
     // ---------------- КОНФИГ (telegram chat, fcm-токены) ----------------

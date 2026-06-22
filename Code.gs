@@ -43,7 +43,6 @@ function sendTelegram(d) {
   var chatId = props.getProperty('TELEGRAM_CHAT_ID');
   if (!token || !chatId) { Logger.log('Telegram не настроен'); return; }
 
-  var price = d.packagePrice ? Number(d.packagePrice).toLocaleString('ru-RU') + ' ₽' : '—';
   var text =
     '🎵 <b>Новая заявка</b>\n\n' +
     '👤 <b>' + esc(d.name) + '</b>\n' +
@@ -51,7 +50,6 @@ function sendTelegram(d) {
     (d.telegram ? '✈️ ' + esc(d.telegram) + '\n' : '') +
     '🎼 Направление: ' + esc(d.direction || '—') + '\n' +
     '📅 ' + esc(d.slotDate || '') + ' в ' + esc(d.slotTime || '') + '\n' +
-    '📦 ' + esc(d.packageTitle || '—') + ' (' + price + ')\n' +
     (d.comment ? '\n💬 ' + esc(d.comment) : '');
 
   UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
