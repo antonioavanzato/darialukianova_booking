@@ -1,0 +1,65 @@
+rules_version = '2';
+
+// =====================================================================
+// Firestore Security Rules — система записи Дарьи Лукьяновой
+// ---------------------------------------------------------------------
+// Принцип:
+//  • slots / packages  — читать может ЛЮБОЙ (форме нужно показывать
+//    свободные слоты и цены), писать — только Даша (вошедший админ).
+//  • bookings — создать может любой (анонимная заявка), но только со
+//    статусом "pending" и валидными полями. Читать/менять/удалять —
+//    только Даша. Так контакты клиентов не утекут.
+//  • config — только Даша.
+// =====================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- разрешённые направления ---
+    function validDirection(d) {
+      return d == 'вокал' || d == 'фортепиано' || d == 'сольфеджио' || d == 'другое';
+    }
+
+    // авторизован ли пользователь как админ (Даша)
+    function isAdmin() {
+      return request.auth != null;
+    }
+
+    // ---------------- СЛОТЫ ----------------
+    match /slots/{slotId} {
+      allow read: if true;                 // форма показывает свободные слоты
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---------------- ПАКЕТЫ ----------------
+    match /packages/{packageId} {
+      allow read: if true;                 // форма показывает цены
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---------------- ЗАЯВКИ ----------------
+    match /bookings/{bookingId} {
+      // читать карточки клиентов может только Даша
+      allow read, update, delete: if isAdmin();
+
+      // создать заявку может любой посетитель формы, но строго:
+      allow create: if
+        request.resource.data.status == 'pending'
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 1
+        && request.resource.data.name.size() < 120
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() > 4
+        && request.resource.data.phone.size() < 40
+        && request.resource.data.comment.size() < 2000
+        && validDirection(request.resource.data.direction)
+        && request.resource.data.slotId is string
+        && request.resource.data.packageId is string;
+    }
+
+    // ---------------- КОНФИГ (telegram chat, fcm-токены) ----------------
+    match /config/{docId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
