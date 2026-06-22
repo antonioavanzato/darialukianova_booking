@@ -74,6 +74,8 @@ function sendPush(d) {
 
   var title = 'Новая заявка: ' + (d.name || '');
   var body = (d.direction || '') + ' · ' + (d.slotDate || '') + ' ' + (d.slotTime || '');
+  // ВАЖНО: link для webpush должен быть АБСОЛЮТНЫМ https-URL (адрес админки на GitHub Pages)
+  var adminUrl = props.getProperty('ADMIN_URL') || 'https://antonioavanzato.github.io/darialukianova_booking/';
 
   tokens.forEach(function (tok) {
     var msg = {
@@ -81,7 +83,10 @@ function sendPush(d) {
         token: tok,
         notification: { title: title, body: body },
         data: { id: String(d.id || ''), name: String(d.name || ''), direction: String(d.direction || '') },
-        webpush: { fcmOptions: { link: './index.html' } }
+        webpush: {
+          notification: { title: title, body: body, icon: adminUrl + 'icons/icon-192.png' },
+          fcmOptions: { link: adminUrl }
+        }
       }
     };
     var res = UrlFetchApp.fetch(
