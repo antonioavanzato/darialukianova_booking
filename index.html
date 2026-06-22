@@ -397,8 +397,30 @@ window.openSheet=function(id){
   $("#sheetBody").innerHTML=c;
   $("#sheetBack").classList.add("show"); $("#sheet").classList.add("show");
 };
-function closeSheet(){ $("#sheetBack").classList.remove("show"); $("#sheet").classList.remove("show"); }
+function closeSheet(){ var s=$("#sheet"); s.style.transition=""; s.style.transform=""; $("#sheetBack").classList.remove("show"); s.classList.remove("show"); }
 $("#sheetBack").onclick=closeSheet;
+
+/* свайп вниз для закрытия модалки */
+(function(){
+  var sheet=$("#sheet"), startY=0, curY=0, dragging=false;
+  sheet.addEventListener("touchstart",function(e){
+    // начинаем тянуть только если контент прокручен в самый верх
+    if(sheet.scrollTop>0){ dragging=false; return; }
+    dragging=true; startY=e.touches[0].clientY; curY=startY; sheet.style.transition="none";
+  },{passive:true});
+  sheet.addEventListener("touchmove",function(e){
+    if(!dragging) return;
+    curY=e.touches[0].clientY;
+    var dy=curY-startY;
+    if(dy>0) sheet.style.transform="translateY("+dy+"px)";
+  },{passive:true});
+  sheet.addEventListener("touchend",function(){
+    if(!dragging) return;
+    dragging=false; sheet.style.transition="";
+    if(curY-startY>110){ closeSheet(); }
+    else { sheet.style.transform=""; }
+  });
+})();
 
 window.setStatus=function(id,status){
   var b=bookings.find(function(x){return x.id===id;}); if(!b) return;
