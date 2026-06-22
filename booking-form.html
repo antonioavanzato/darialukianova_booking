@@ -33,6 +33,9 @@
 .cvh-booking .eyebrow{font-size:10px;font-weight:500;letter-spacing:.5em;text-transform:uppercase;color:var(--gray);}
 .cvh-booking .step-ttl{font-size:24px;font-weight:300;margin:10px 0 4px;}
 .cvh-booking .step-sub{font-size:14px;color:var(--gray);margin-bottom:20px;}
+.cvh-booking .cat{font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--gray);
+  margin:4px 2px 12px;}
+.cvh-booking .cat+.cat,.cvh-booking .opt+.cat{margin-top:26px;}
 
 /* прогресс по шагам */
 .cvh-booking .steps{display:flex;gap:6px;margin-bottom:24px;}
@@ -130,6 +133,8 @@
   <div class="pane on" id="cvhPane0">
     <h2 class="step-ttl">Направление</h2>
     <div class="step-sub">Выберите, чем хотите заниматься</div>
+
+    <div class="cat">Индивидуальные</div>
     <button class="opt" data-dir="вокал">
       <span class="ic"><span class="material-symbols-outlined">mic</span></span>
       <div><div class="t">Вокал</div><div class="s">Постановка голоса, дыхание</div></div>
@@ -141,6 +146,20 @@
     <button class="opt" data-dir="сольфеджио">
       <span class="ic"><span class="material-symbols-outlined">music_note</span></span>
       <div><div class="t">Сольфеджио</div><div class="s">Музыкальная теория и слух</div></div>
+    </button>
+
+    <div class="cat">Групповые</div>
+    <button class="opt" data-dir="групповой вокал">
+      <span class="ic"><span class="material-symbols-outlined">groups</span></span>
+      <div><div class="t">Групповой вокал</div><div class="s">Ансамбль, многоголосие · от 2 человек</div></div>
+    </button>
+    <button class="opt" data-dir="хор">
+      <span class="ic"><span class="material-symbols-outlined">diversity_3</span></span>
+      <div><div class="t">Хор</div><div class="s">Еженедельные занятия · от 3 человек</div></div>
+    </button>
+    <button class="opt" data-dir="мастер-класс">
+      <span class="ic"><span class="material-symbols-outlined">co_present</span></span>
+      <div><div class="t">Мастер-класс</div><div class="s">Разовое занятие в компании · от 2 человек</div></div>
     </button>
   </div>
 
@@ -304,11 +323,15 @@ function loadPackages(){
 }
 function renderPackages(){
   var el=$("#cvhPackages");
-  if(!allPackages.length){
-    el.innerHTML='<div class="hint"><span class="material-symbols-outlined">inventory_2</span>Пакеты пока не добавлены</div>';
+  // пакет показываем, если у него нет поля directions (общий) либо в нём есть выбранное направление
+  var list=allPackages.filter(function(p){
+    return !p.directions || !p.directions.length || p.directions.indexOf(state.direction)>=0;
+  });
+  if(!list.length){
+    el.innerHTML='<div class="hint"><span class="material-symbols-outlined">inventory_2</span>Для этого направления пакеты пока не добавлены</div>';
     return;
   }
-  el.innerHTML=allPackages.map(function(p){
+  el.innerHTML=list.map(function(p){
     return '<button class="opt" data-id="'+p.id+'">'+
       '<span class="ic"><span class="material-symbols-outlined">redeem</span></span>'+
       '<div><div class="t">'+esc(p.title)+'</div>'+
@@ -332,7 +355,7 @@ function renderSummary(){
   $("#cvhSummary").innerHTML=
     row("Направление", cap(state.direction))+
     row("Дата", DOW[d.getDay()]+', '+d.getDate()+' '+MON[d.getMonth()]+' · '+state.slot.time)+
-    row("Пакет", state.pkg.title)+
+    row("Пакет", state.pkg.title + (state.pkg.description ? " · " + state.pkg.description : ""))+
     row("Стоимость", fmtPrice(state.pkg.price));
 }
 
