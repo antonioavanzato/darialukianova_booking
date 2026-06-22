@@ -1,10 +1,15 @@
 /* Service Worker админки — офлайн-кэш оболочки.
    ВАЖНО: лежит в КОРНЕ сайта (рядом с index.html), иначе PWA/scope не работают. */
-const CACHE = "daria-admin-v1";
+const CACHE = "daria-admin-v2";
 const ASSETS = [
   "./",
   "./index.html",
-  "./manifest.json"
+  "./manifest.json",
+  "./assets/fonts.css",
+  "./assets/fonts/material-symbols.woff2",
+  "./assets/fonts/inter-cyrillic.woff2",
+  "./assets/fonts/inter-cyrillic-ext.woff2",
+  "./assets/fonts/inter-latin.woff2"
 ];
 
 self.addEventListener("install", (e) => {
