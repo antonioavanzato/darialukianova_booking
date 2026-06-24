@@ -276,6 +276,13 @@ var VAPID_KEY = "BOAWhxye9yCyuNZNqXPYbiWVxynUAtBoN8PwPmSgNw_gmqnJdbLxyVjcsKpu9sZ
 firebase.initializeApp(FIREBASE_CONFIG);
 var auth = firebase.auth();
 var db = firebase.firestore();
+// Локальный кэш (IndexedDB): списки показываются мгновенно из памяти устройства,
+// свежие данные подтягиваются с сервера в фоне. Включаем ДО любого обращения к БД.
+// synchronizeTabs — корректная работа при нескольких открытых вкладках.
+try {
+  db.enablePersistence({ synchronizeTabs: true })
+    .catch(function(e){ console.warn("Локальный кэш Firestore не включился, работаем без него:", e && e.code ? e.code : e); });
+} catch(e){ console.warn("Локальный кэш недоступен:", e); }
 var messaging = null;
 try { messaging = firebase.messaging(); } catch(e){ console.warn("FCM недоступен в этом браузере", e); }
 
