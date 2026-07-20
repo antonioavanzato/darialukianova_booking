@@ -41,7 +41,7 @@ yc serverless function version create \
   --memory 256m --execution-timeout 15s \
   --service-account-id "$SA_ID" \
   --source-path fn.zip \
-  --environment "YDB_ENDPOINT=$YDB_ENDPOINT,YDB_DATABASE=$YDB_DATABASE,ADMIN_PASSWORD=$ADMIN_PASSWORD,JWT_SECRET=$JWT_SECRET,TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-},TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}"
+  --environment "YDB_ENDPOINT=$YDB_ENDPOINT,YDB_DATABASE=$YDB_DATABASE,ADMIN_PASSWORD=$ADMIN_PASSWORD,JWT_SECRET=$JWT_SECRET${TELEGRAM_TOKEN:+,TELEGRAM_TOKEN=$TELEGRAM_TOKEN}${TELEGRAM_CHAT_ID:+,TELEGRAM_CHAT_ID=$TELEGRAM_CHAT_ID}"
 rm -f fn.zip
 yc serverless function allow-unauthenticated-invoke "$FN_NAME" --folder-id "$FOLDER_ID"
 FN_ID=$(yc serverless function get "$FN_NAME" --folder-id "$FOLDER_ID" --format json | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
