@@ -249,8 +249,11 @@ module.exports.handler = async function (event) {
     if (method === 'OPTIONS') return respond({ code: 204, body: {} });
 
     if (method === 'POST' && path.endsWith('/login')) {
+      const wantLogin = process.env.ADMIN_LOGIN;
+      if (wantLogin && (data.login || '').trim().toLowerCase() !== wantLogin.toLowerCase())
+        return respond({ code: 401, body: { error: 'Неверный логин или пароль' } });
       if (!data.password || data.password !== process.env.ADMIN_PASSWORD)
-        return respond({ code: 401, body: { error: 'Неверный пароль' } });
+        return respond({ code: 401, body: { error: 'Неверный логин или пароль' } });
       return respond({ code: 200, body: { token: signToken() } });
     }
     if (method === 'GET' && path.endsWith('/slots') && !path.includes('/admin/'))

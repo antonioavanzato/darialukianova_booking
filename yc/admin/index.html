@@ -285,10 +285,10 @@ function api(method, path, body){
 /* Email не нужен — вход по одному паролю; поле оставлено скрытым для автозаполнения */
 $("#email").closest(".fld").style.display="none";
 $("#loginBtn").onclick=function(){
-  var btn=this, p=$("#password").value;
+  var btn=this, p=$("#password").value, l=$("#email").value;
   $("#loginErr").textContent="";
   btn.disabled=true; var o=btn.innerHTML; btn.innerHTML='<span class="spin"></span>';
-  api("POST","/api/login",{password:p}).then(function(r){
+  api("POST","/api/login",{login:l,password:p}).then(function(r){
     token=r.token; localStorage.setItem("adm_token", token);
     btn.disabled=false; btn.innerHTML=o;
     showApp();
