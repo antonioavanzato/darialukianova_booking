@@ -1,0 +1,16 @@
+openapi: 3.0.0
+info:
+  title: daria-booking
+  version: 1.0.0
+paths:
+  /api/{proxy+}:
+    x-yc-apigateway-any-method:
+      parameters:
+        - name: proxy
+          in: path
+          required: true
+          schema: { type: string }
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: __FUNCTION_ID__
+        service_account_id: __SA_ID__

@@ -1,0 +1,160 @@
+<!-- ФОРМА ЗАЯВКИ — Дарья Лукьянова (версия для Yandex Cloud API) -->
+<!-- Вставляется HTML-блоком на страницу Wfolio. Отличие от Firebase-версии:
+     данные ходят через свой API (Cloud Function + YDB в РФ), Firebase SDK
+     и Apps Script не нужны. Разметка и стили — прежние. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet"/>
+
+<style>
+/* СТИЛИ НЕ МЕНЯЛИСЬ — скопируйте блок <style>…</style> из текущей
+   Firebase-версии формы на Wfolio без изменений. */
+</style>
+
+<!-- РАЗМЕТКА НЕ МЕНЯЛАСЬ — скопируйте <div class="cvh-booking">…</div>
+     из текущей версии формы без изменений. -->
+
+<script>
+(function(){
+/* ⬇ ПОДСТАВИТЬ URL API Gateway после деплоя (yc/deploy.sh) ⬇ */
+var API_URL = "https://__YOUR_GATEWAY__.apigw.yandexcloud.net";
+
+var DOW=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+var MON=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
+var root=document.getElementById("cvhBooking");
+var $=function(s){return root.querySelector(s);};
+
+var state={ direction:null, slot:null };
+var allSlots=[];
+
+function go(step){
+  for(var i=0;i<=3;i++){
+    var p=document.getElementById("cvhPane"+i);
+    if(p) p.classList.toggle("on", i===step);
+  }
+  root.querySelectorAll(".steps .dot").forEach(function(d){
+    d.classList.toggle("on", Number(d.dataset.d) <= Math.min(step,2));
+  });
+  try{ root.scrollIntoView({behavior:"smooth",block:"start"}); }catch(e){}
+}
+
+$("#cvhPane0").querySelectorAll(".opt").forEach(function(b){
+  b.onclick=function(){
+    state.direction=b.dataset.dir; state.slot=null;
+    $("#cvhPane0").querySelectorAll(".opt").forEach(function(x){x.classList.remove("sel");});
+    b.classList.add("sel");
+    loadSlots();
+    go(1);
+  };
+});
+
+function loadSlots(){
+  var el=$("#cvhSlots");
+  el.innerHTML='<div class="hint"><span class="material-symbols-outlined">hourglass_empty</span>Загрузка…</div>';
+  fetch(API_URL+"/api/slots?direction="+encodeURIComponent(state.direction))
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(list){
+      allSlots=list.map(function(s){
+        return { id:s.id, date:s.date, time:s.time, durationMin:Number(s.duration_min)||50 };
+      });
+      renderSlots();
+    })
+    .catch(function(e){
+      el.innerHTML='<div class="hint"><span class="material-symbols-outlined">error</span>Не удалось загрузить слоты</div>';
+      console.error(e);
+    });
+}
+function renderSlots(){
+  var el=$("#cvhSlots");
+  if(!allSlots.length){
+    el.innerHTML='<div class="hint"><span class="material-symbols-outlined">event_busy</span>Свободных слотов по этому направлению пока нет</div>';
+    return;
+  }
+  el.innerHTML=allSlots.map(function(s){
+    var d=parseDate(s.date);
+    return '<button class="chip" data-id="'+s.id+'">'+
+      '<div class="cd">'+d.getDate()+' '+MON[d.getMonth()]+'</div>'+
+      '<div class="ct">'+DOW[d.getDay()]+' · '+s.time+'</div>'+
+      '<div class="cdur">'+fmtDur(s.durationMin)+'</div></button>';
+  }).join("");
+  el.querySelectorAll(".chip").forEach(function(c){
+    c.onclick=function(){
+      state.slot=allSlots.find(function(x){return x.id===c.dataset.id;});
+      el.querySelectorAll(".chip").forEach(function(x){x.classList.remove("sel");});
+      c.classList.add("sel");
+      renderSummary();
+      go(2);
+    };
+  });
+}
+
+function renderSummary(){
+  var d=parseDate(state.slot.date);
+  $("#cvhSummary").innerHTML=
+    row("Направление", cap(state.direction))+
+    row("Дата", DOW[d.getDay()]+', '+d.getDate()+' '+MON[d.getMonth()]+' · '+state.slot.time)+
+    row("Длительность", fmtDur(state.slot.durationMin));
+}
+
+/* ---------- телефон: автоподстановка +7 и маска ---------- */
+var phoneEl=$("#cvhPhone");
+function fmtPhone(v){
+  var d=String(v).replace(/\D/g,"");
+  if(d.charAt(0)==="8") d=d.slice(1);
+  if(d.charAt(0)==="7") d=d.slice(1);
+  d=d.slice(0,10);
+  var r="+7";
+  if(d.length>0) r+=" ("+d.slice(0,3);
+  if(d.length>=3) r+=") "+d.slice(3,6);
+  if(d.length>=6) r+="-"+d.slice(6,8);
+  if(d.length>=8) r+="-"+d.slice(8,10);
+  return r;
+}
+phoneEl.addEventListener("focus",function(){ if(!phoneEl.value){ phoneEl.value="+7 ("; } });
+phoneEl.addEventListener("input",function(){ phoneEl.value=fmtPhone(phoneEl.value); });
+
+$("#cvhAgree").onchange=function(){ $("#cvhSubmit").disabled = !this.checked; };
+
+$("#cvhSubmit").onclick=function(){
+  var btn=this, err=$("#cvhErr"); err.textContent="";
+  if(!$("#cvhAgree").checked) return err.textContent="Подтвердите согласие с политикой конфиденциальности";
+  var name=$("#cvhName").value.trim();
+  var phone=$("#cvhPhone").value.trim();
+  var tg=$("#cvhTg").value.trim();
+  var comment=$("#cvhComment").value.trim();
+  if(name.length<2) return err.textContent="Укажите имя";
+  if(phone.replace(/[^\d]/g,"").length<11) return err.textContent="Введите номер телефона полностью";
+  if(!state.slot) return err.textContent="Выберите слот";
+
+  btn.disabled=true; var orig=btn.innerHTML; btn.innerHTML='<span class="spin"></span>';
+
+  fetch(API_URL+"/api/bookings",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      slotId:state.slot.id, direction:state.direction,
+      name:name, phone:phone, telegram:tg, comment:comment
+    })
+  }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+    .then(function(res){
+      if(!res.ok) throw new Error(res.j.error||"Ошибка");
+      go(3);
+    })
+    .catch(function(e){
+      btn.disabled=false; btn.innerHTML=orig;
+      err.textContent = e.message==="Failed to fetch"
+        ? "Не удалось отправить заявку. Попробуйте ещё раз."
+        : e.message;
+    });
+};
+
+$("#cvhBack1").onclick=function(){ go(0); };
+$("#cvhBack2").onclick=function(){ go(1); };
+
+function row(k,v){ return '<div class="r"><span class="k">'+esc(k)+'</span><span class="v">'+esc(v)+'</span></div>'; }
+function parseDate(s){ var p=String(s).split("-"); return new Date(+p[0],(+p[1]-1),+p[2]); }
+function fmtDur(m){ m=Number(m)||50; var h=Math.floor(m/60), mm=m%60; return (h?h+' ч'+(mm?' ':''):'')+(mm?mm+' мин':(h?'':'0 мин')); }
+function cap(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):s; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+})();
+</script>
