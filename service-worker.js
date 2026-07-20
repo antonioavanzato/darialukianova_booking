@@ -1,6 +1,6 @@
 /* Service Worker админки — офлайн-кэш оболочки.
    ВАЖНО: лежит в КОРНЕ сайта (рядом с index.html), иначе PWA/scope не работают. */
-const CACHE = "daria-admin-v7";
+const CACHE = "daria-admin-v8";
 const ASSETS = [
   "./",
   "./index.html",
@@ -33,6 +33,17 @@ self.addEventListener("fetch", (e) => {
     return;
   }
   e.respondWith(caches.match(req).then((hit) => hit || fetch(req)));
+});
+
+// Push от сервера (новая заявка)
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data.json(); } catch (_) { d = { body: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || "Новая заявка", {
+    body: d.body || "",
+    icon: "./icons/icon-192.png",
+    badge: "./icons/icon-192.png",
+  }));
 });
 
 // Клик по уведомлению → открыть/сфокусировать админку

@@ -105,6 +105,70 @@ async function sendTelegram(b) {
   } catch (e) { console.warn('telegram', e); }
 }
 
+/* ---------- web push (iOS PWA / браузеры) ---------- */
+let webpush = null;
+function getWebpush() {
+  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return null;
+  if (!webpush) {
+    webpush = require('web-push');
+    webpush.setVapidDetails(
+      process.env.VAPID_SUBJECT || 'mailto:style_of_live@mail.ru',
+      process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY
+    );
+  }
+  return webpush;
+}
+
+function subId(endpoint) {
+  return crypto.createHash('sha256').update(String(endpoint)).digest('hex');
+}
+
+async function savePushSubscription(data) {
+  const endpoint = String((data && data.endpoint) || '');
+  const keys = (data && data.keys) || {};
+  if (!/^https:\/\//.test(endpoint) || !keys.p256dh || !keys.auth)
+    return { code: 400, body: { error: 'Неверная подписка' } };
+  await query(
+    'DECLARE $id AS Utf8; DECLARE $endpoint AS Utf8; DECLARE $p256dh AS Utf8;\n' +
+    'DECLARE $auth AS Utf8; DECLARE $created AS Uint64;\n' +
+    'UPSERT INTO push_subscriptions (id, endpoint, p256dh, auth, created_at)\n' +
+    'VALUES ($id, $endpoint, $p256dh, $auth, $created);',
+    { $id: TypedValues.utf8(subId(endpoint)), $endpoint: TypedValues.utf8(endpoint),
+      $p256dh: TypedValues.utf8(String(keys.p256dh)), $auth: TypedValues.utf8(String(keys.auth)),
+      $created: TypedValues.uint64(Date.now()) }
+  );
+  return { code: 200, body: { ok: true } };
+}
+
+async function deletePushSubscription(data) {
+  const endpoint = String((data && data.endpoint) || '');
+  if (!endpoint) return { code: 400, body: { error: 'Нет endpoint' } };
+  await query('DECLARE $id AS Utf8; DELETE FROM push_subscriptions WHERE id = $id;',
+    { $id: TypedValues.utf8(subId(endpoint)) });
+  return { code: 200, body: { ok: true } };
+}
+
+async function sendWebPush(b) {
+  const wp = getWebpush();
+  if (!wp) return;
+  const rows = (await query('SELECT id, endpoint, p256dh, auth FROM push_subscriptions;'))[0] || [];
+  if (!rows.length) return;
+  const payload = JSON.stringify({
+    title: '🎵 Новая заявка',
+    body: b.name + ' · ' + b.direction + '\n' + b.slot_date + ' в ' + b.slot_time,
+  });
+  await Promise.all(rows.map(async (r) => {
+    try {
+      await wp.sendNotification({ endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } }, payload, { TTL: 3600 });
+    } catch (e) {
+      if (e && (e.statusCode === 404 || e.statusCode === 410))
+        await query('DECLARE $id AS Utf8; DELETE FROM push_subscriptions WHERE id = $id;',
+          { $id: TypedValues.utf8(r.id) }).catch(() => {});
+      else console.warn('webpush', e && e.statusCode, e && e.body);
+    }
+  }));
+}
+
 /* ---------- handlers ---------- */
 async function publicSlots(qs) {
   const today = new Date().toISOString().slice(0, 10);
@@ -154,7 +218,9 @@ async function createBooking(data) {
       $created: TypedValues.uint64(Date.now()),
     }
   );
-  await sendTelegram({ name, phone, telegram: data.telegram, comment: data.comment, direction: data.direction, slot_date: slot.date, slot_time: slot.time });
+  const notice = { name, phone, telegram: data.telegram, comment: data.comment, direction: data.direction, slot_date: slot.date, slot_time: slot.time };
+  await sendTelegram(notice);
+  try { await sendWebPush(notice); } catch (e) { console.warn('push', e); }
   return { code: 200, body: { ok: true, id } };
 }
 
@@ -266,6 +332,12 @@ module.exports.handler = async function (event) {
 
     // всё, что ниже, — только для Даши
     if (!checkToken(headers)) return respond({ code: 401, body: { error: 'Не авторизован' } });
+
+    if (path.endsWith('/admin/push')) {
+      if (method === 'GET') return respond({ code: 200, body: { publicKey: process.env.VAPID_PUBLIC_KEY || null } });
+      if (method === 'POST') return respond(await savePushSubscription(data));
+      if (method === 'DELETE') return respond(await deletePushSubscription(data));
+    }
 
     const m = path.match(/\/admin\/(bookings|slots)(?:\/([^/]+))?$/);
     if (!m) return respond({ code: 404, body: { error: 'Не найдено' } });

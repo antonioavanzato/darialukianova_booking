@@ -11,6 +11,15 @@ CREATE TABLE slots (
     PRIMARY KEY (id)
 );
 
+CREATE TABLE push_subscriptions (
+    id Utf8 NOT NULL,      -- sha256(endpoint)
+    endpoint Utf8,
+    p256dh Utf8,
+    auth Utf8,
+    created_at Uint64,     -- ms epoch
+    PRIMARY KEY (id)
+);
+
 CREATE TABLE bookings (
     id Utf8 NOT NULL,
     slot_id Utf8,
