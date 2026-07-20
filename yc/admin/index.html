@@ -257,7 +257,7 @@ input,select{font:inherit;}
    + YDB). Живые обновления заменены поллингом раз в 20 секунд.
    ⬇ ПОДСТАВИТЬ URL API Gateway после деплоя (yc/deploy.sh) ⬇
    =================================================================== */
-var API_URL = "https://__YOUR_GATEWAY__.apigw.yandexcloud.net";
+var API_URL = "https://d5dfvqmsv02vbpei383a.uvah0e6r.apigw.yandexcloud.net";
 
 var DOW=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
 var MON=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
@@ -285,10 +285,10 @@ function api(method, path, body){
 /* Email не нужен — вход по одному паролю; поле оставлено скрытым для автозаполнения */
 $("#email").closest(".fld").style.display="none";
 $("#loginBtn").onclick=function(){
-  var btn=this, p=$("#password").value;
+  var btn=this, p=$("#password").value, l=$("#email").value;
   $("#loginErr").textContent="";
   btn.disabled=true; var o=btn.innerHTML; btn.innerHTML='<span class="spin"></span>';
-  api("POST","/api/login",{password:p}).then(function(r){
+  api("POST","/api/login",{login:l,password:p}).then(function(r){
     token=r.token; localStorage.setItem("adm_token", token);
     btn.disabled=false; btn.innerHTML=o;
     showApp();
