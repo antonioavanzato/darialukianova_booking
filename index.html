@@ -282,8 +282,6 @@ function api(method, path, body){
 }
 
 /* ---------- AUTH ---------- */
-/* Email не нужен — вход по одному паролю; поле оставлено скрытым для автозаполнения */
-$("#email").closest(".fld").style.display="none";
 $("#loginBtn").onclick=function(){
   var btn=this, p=$("#password").value, l=$("#email").value;
   $("#loginErr").textContent="";
