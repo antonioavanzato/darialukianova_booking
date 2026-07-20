@@ -91,6 +91,30 @@ input,select{font:inherit;}
 .secttl{font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--gray);
   margin:22px 4px 12px;}
 
+/* calendar */
+.cal{background:var(--white);border:1px solid var(--line-10);border-radius:var(--r);padding:16px;margin-bottom:16px;}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.cal-head .m{font-size:16px;font-weight:500;}
+.cal-nav{width:38px;height:38px;border-radius:999px;border:1px solid var(--line-10);background:var(--white);
+  display:flex;align-items:center;justify-content:center;color:var(--ink);}
+.cal-dow{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px;}
+.cal-dow div{text-align:center;font-size:11px;color:var(--gray);font-weight:500;padding:4px 0;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.cal-day{aspect-ratio:1;border:none;background:transparent;border-radius:14px;font-size:15px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--ink);
+  cursor:pointer;transition:.25s var(--ease);position:relative;}
+.cal-day.past{color:var(--line-20);}
+.cal-day.hasfree{background:var(--stone-100);font-weight:500;}
+.cal-day.sel{background:var(--ink);color:#fff;}
+.cal-day .dots{display:flex;gap:3px;height:4px;}
+.cal-day .dots i{width:4px;height:4px;border-radius:999px;display:block;}
+.cal-day .dots i.g{background:var(--green);}
+.cal-day .dots i.o{background:#d97706;}
+.cal-day .dots i.f{background:var(--line-20);}
+.cal-day.sel .dots i.f{background:rgba(255,255,255,.5);}
+.cal-legend{display:flex;gap:16px;justify-content:center;margin-top:10px;font-size:11px;color:var(--gray);}
+.cal-legend i{width:6px;height:6px;border-radius:999px;display:inline-block;margin-right:5px;}
+
 /* booking card */
 .bcard{background:var(--white);border:1px solid var(--line-10);border-radius:var(--r);padding:18px;
   margin-bottom:12px;transition:.35s var(--ease);}
@@ -226,29 +250,45 @@ input,select{font:inherit;}
   <div class="pull-ind" id="pullInd"><span class="spin dark"></span></div>
 
   <div class="tabs">
-    <button class="tab on" data-tab="bookings">Заявки<span class="badge" id="pendBadge">0</span></button>
-    <button class="tab" data-tab="calendar">Календарь</button>
+    <button class="tab on" data-tab="calendar">Календарь</button>
+    <button class="tab" data-tab="bookings">Заявки<span class="badge" id="pendBadge">0</span></button>
   </div>
 
   <!-- BOOKINGS -->
-  <div class="view on" id="view-bookings"><div class="stats" id="stats"></div><div id="bookingsList"></div></div>
+  <div class="view" id="view-bookings"><div class="stats" id="stats"></div><div id="bookingsList"></div></div>
 
   <!-- CALENDAR -->
-  <div class="view" id="view-calendar">
-    <div class="secttl">Добавить слот</div>
-    <div class="slot-form">
-      <div class="row">
-        <input id="sfDate" type="date">
-        <input id="sfTime" type="time">
+  <div class="view on" id="view-calendar">
+    <div class="cal">
+      <div class="cal-head">
+        <button class="cal-nav" id="calPrev"><span class="material-symbols-outlined">chevron_left</span></button>
+        <div class="m" id="calMonth"></div>
+        <button class="cal-nav" id="calNext"><span class="material-symbols-outlined">chevron_right</span></button>
       </div>
-      <div class="row3">
-        <select id="sfDir"><option value="вокал">Вокал</option><option value="фортепиано">Фортепиано</option><option value="сольфеджио">Сольфеджио</option><option value="групповой вокал">Групповой вокал</option><option value="хор">Хор</option><option value="мастер-класс">Мастер-класс</option></select>
-        <select id="sfDur"><option value="50" selected>50 мин</option><option value="75">1 ч 15 мин</option><option value="100">1 ч 40 мин</option></select>
+      <div class="cal-dow"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div></div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-legend">
+        <span><i style="background:var(--green);"></i>подтверждено</span>
+        <span><i style="background:#d97706;"></i>ждёт ответа</span>
+        <span><i style="background:var(--line-20);"></i>свободный слот</span>
       </div>
-      <button class="btn primary block" id="addSlotBtn" style="margin-top:12px;"><span class="material-symbols-outlined">add</span>Добавить</button>
     </div>
-    <div class="secttl">Свободные и занятые слоты</div>
-    <div id="slotsList"></div>
+    <div id="dayPanel" style="display:none;">
+      <div class="secttl" id="dayTitle"></div>
+      <div class="slot-form">
+        <div class="row">
+          <input id="sfTime" type="time" value="12:00">
+          <select id="sfDur"><option value="50" selected>50 мин</option><option value="55">55 мин</option><option value="75">1 ч 15 мин</option><option value="100">1 ч 40 мин</option><option value="110">1 ч 50 мин</option></select>
+        </div>
+        <div class="row3">
+          <select id="sfRepeat"><option value="1" selected>Только эта дата</option><option value="2">Повторять 2 недели</option><option value="4">Повторять 4 недели</option><option value="8">Повторять 8 недель</option></select>
+          <button class="btn primary block" id="addSlotBtn"><span class="material-symbols-outlined">add</span>Добавить слот</button>
+        </div>
+      </div>
+      <div id="daySlots"></div>
+      <div class="secttl" id="dayBookTtl" style="display:none;">Записи в этот день</div>
+      <div id="dayBookings"></div>
+    </div>
   </div>
 </div>
 
@@ -368,12 +408,13 @@ function refresh(){
   return Promise.all([api("GET","/api/admin/bookings"), api("GET","/api/admin/slots")])
     .then(function(r){
       bookings=r[0].map(fromApiBooking); slots=r[1].map(fromApiSlot);
-      renderBookings(); renderSlots();
+      renderBookings(); renderCal(); renderDay();
     }).catch(function(e){ console.warn(e); });
 }
 function fromApiBooking(b){
-  return { id:b.id, slotId:b.slot_id, direction:b.direction, name:b.name, phone:b.phone,
-    telegram:b.telegram, comment:b.comment, status:b.status,
+  return { id:b.id, slotId:b.slot_id, slotId2:b.slot_id2||null, direction:b.direction, name:b.name, phone:b.phone,
+    telegram:b.telegram, comment:b.comment, status:b.status, package:b.package||b.direction||"",
+    price:Number(b.price)||null, durationMin:Number(b.duration_min)||null,
     slotDate:b.slot_date, slotTime:b.slot_time, createdAt:Number(b.created_at)||null };
 }
 function fromApiSlot(s){
@@ -407,7 +448,7 @@ function renderBookings(){
   el.innerHTML = sorted.map(function(b){
     return '<div class="bcard '+(b.status==="pending"?"pending":"")+'" onclick="openSheet(\''+b.id+'\')">'+
       '<div class="top"><div><div class="nm">'+esc(b.name)+'</div>'+
-      '<div class="meta">'+cap(b.direction||"")+(b.telegram?' · '+esc(b.telegram):'')+'</div></div>'+
+      '<div class="meta">'+esc(b.package||"")+(b.price?' · '+b.price+' ₽':'')+'</div></div>'+
       '<span class="pill '+b.status+'">'+statusLbl(b.status)+'</span></div>'+
       '<div class="when"><span class="material-symbols-outlined">event</span>'+fmtSlot(b)+'</div>'+
     '</div>';
@@ -415,43 +456,96 @@ function renderBookings(){
 }
 
 function renderStats(){
-  var conf = bookings.filter(function(b){return b.status==="confirmed";});
-  var vocal = conf.filter(function(b){return b.direction==="вокал";}).length;
-  var piano = conf.filter(function(b){return b.direction==="фортепиано";}).length;
+  var pend = bookings.filter(function(b){return b.status==="pending";}).length;
+  var conf = bookings.filter(function(b){return b.status==="confirmed";}).length;
   $("#stats").innerHTML =
-    '<div class="stat"><span class="si"><span class="material-symbols-outlined">mic</span></span>'+
-      '<div><div class="sv">'+vocal+'</div><div class="sl">Вокал</div></div></div>'+
-    '<div class="stat"><span class="si"><span class="material-symbols-outlined">piano</span></span>'+
-      '<div><div class="sv">'+piano+'</div><div class="sl">Фортепиано</div></div></div>';
+    '<div class="stat"><span class="si"><span class="material-symbols-outlined">schedule</span></span>'+
+      '<div><div class="sv">'+pend+'</div><div class="sl">Ждут ответа</div></div></div>'+
+    '<div class="stat"><span class="si"><span class="material-symbols-outlined">check_circle</span></span>'+
+      '<div><div class="sv">'+conf+'</div><div class="sl">Подтверждено</div></div></div>';
 }
 
 function slotStatusLbl(s){ return s==="booked"?"занят":s==="hold"?"ожидает подтверждения":"свободен"; }
-function renderSlots(){
-  var el=$("#slotsList");
-  if(!slots.length){ el.innerHTML='<div class="empty"><span class="material-symbols-outlined">event_busy</span>Слотов нет</div>'; return; }
-  el.innerHTML = slots.map(function(s){
-    var dt=parseDate(s.date);
+
+/* ---------- CALENDAR ---------- */
+var calMonth=null, selDate=null;
+var MONF=["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+function todayStr(){ var d=new Date(), p=function(n){return n<10?"0"+n:n;};
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
+function dayInfo(){
+  var info={};
+  slots.forEach(function(s){ (info[s.date]=info[s.date]||{free:0,g:0,o:0}).free += (s.status==="free"?1:0); });
+  bookings.forEach(function(b){
+    if(!b.slotDate || b.status==="cancelled") return;
+    var i=(info[b.slotDate]=info[b.slotDate]||{free:0,g:0,o:0});
+    if(b.status==="confirmed") i.g++; else i.o++;
+  });
+  return info;
+}
+function renderCal(){
+  if(!calMonth){ var n=new Date(); calMonth=[n.getFullYear(), n.getMonth()]; }
+  var y=calMonth[0], m=calMonth[1], info=dayInfo(), today=todayStr();
+  $("#calMonth").textContent=MONF[m]+" "+y;
+  var startDow=(new Date(y,m,1).getDay()+6)%7;
+  var days=new Date(y,m+1,0).getDate();
+  var html="", p=function(n){return n<10?"0"+n:n;};
+  for(var i=0;i<startDow;i++) html+="<div></div>";
+  for(var d=1;d<=days;d++){
+    var ds=y+"-"+p(m+1)+"-"+p(d), inf=info[ds];
+    var dots="";
+    if(inf){
+      for(var k=0;k<Math.min(inf.g,3);k++) dots+='<i class="g"></i>';
+      for(k=0;k<Math.min(inf.o,3-Math.min(inf.g,3));k++) dots+='<i class="o"></i>';
+      if(inf.free && (inf.g+inf.o)<3) dots+='<i class="f"></i>';
+    }
+    var cls="cal-day"+(ds<today?" past":"")+(inf&&inf.free?" hasfree":"")+(selDate===ds?" sel":"");
+    html+='<button class="'+cls+'" data-d="'+ds+'"><span>'+d+'</span><span class="dots">'+dots+'</span></button>';
+  }
+  $("#calGrid").innerHTML=html;
+  $("#calGrid").querySelectorAll(".cal-day").forEach(function(b){
+    b.onclick=function(){ selDate=b.dataset.d; renderCal(); renderDay(); };
+  });
+}
+$("#calPrev").onclick=function(){ calMonth=calMonth[1]?[calMonth[0],calMonth[1]-1]:[calMonth[0]-1,11]; renderCal(); };
+$("#calNext").onclick=function(){ calMonth=calMonth[1]<11?[calMonth[0],calMonth[1]+1]:[calMonth[0]+1,0]; renderCal(); };
+
+function renderDay(){
+  var panel=$("#dayPanel");
+  if(!selDate){ panel.style.display="none"; return; }
+  panel.style.display="block";
+  var dt=parseDate(selDate);
+  $("#dayTitle").textContent=DOW[dt.getDay()]+", "+dt.getDate()+" "+MON[dt.getMonth()];
+  var ds=slots.filter(function(s){return s.date===selDate;});
+  $("#daySlots").innerHTML = ds.length ? ds.map(function(s){
     return '<div class="slot-row '+(s.status!=="free"?"booked":"")+'">'+
-      '<div><div class="d">'+DOW[dt.getDay()]+', '+dt.getDate()+' '+MON[dt.getMonth()]+' · '+s.time+'</div>'+
-      '<div class="t">'+cap(s.direction)+' · '+fmtDur(s.durationMin)+' · '+slotStatusLbl(s.status)+'</div></div>'+
+      '<div><div class="d">'+s.time+"–"+addMin(s.time,s.durationMin)+'</div>'+
+      '<div class="t">'+fmtDur(s.durationMin)+' · '+slotStatusLbl(s.status)+'</div></div>'+
       (s.status==="free"?'<button class="slot-del" onclick="delSlot(\''+s.id+'\')"><span class="material-symbols-outlined">delete</span></button>':'')+
+    '</div>';
+  }).join("") : '<div class="empty" style="padding:20px;"><span class="material-symbols-outlined">event_busy</span>Слотов на эту дату нет</div>';
+  var db=bookings.filter(function(b){return b.slotDate===selDate && b.status!=="cancelled";});
+  $("#dayBookTtl").style.display = db.length ? "block" : "none";
+  $("#dayBookings").innerHTML = db.map(function(b){
+    return '<div class="bcard '+(b.status==="pending"?"pending":"")+'" onclick="openSheet(\''+b.id+'\')">'+
+      '<div class="top"><div><div class="nm">'+esc(b.name)+'</div>'+
+      '<div class="meta">'+esc(b.package||"")+(b.price?' · '+b.price+' ₽':'')+'</div></div>'+
+      '<span class="pill '+b.status+'">'+statusLbl(b.status)+'</span></div>'+
+      '<div class="when"><span class="material-symbols-outlined">schedule</span>'+(b.slotTime||"")+'</div>'+
     '</div>';
   }).join("");
 }
+function addMin(t,m){ var q=String(t).split(":"), x=(+q[0])*60+(+q[1])+(Number(m)||0);
+  return ("0"+Math.floor(x/60)).slice(-2)+":"+("0"+(x%60)).slice(-2); }
 
 /* ---------- ADD / DELETE SLOT ---------- */
-(function(){
-  var d=new Date(), p=function(n){return n<10?"0"+n:n;};
-  var today=d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
-  $("#sfDate").value=today; $("#sfDate").min=today;
-  $("#sfTime").value="12:00";
-})();
 $("#addSlotBtn").onclick=function(){
-  var date=$("#sfDate").value, time=$("#sfTime").value;
-  if(!date||!time) return toast("Укажите дату и время");
+  var time=$("#sfTime").value;
+  if(!selDate) return toast("Выберите дату в календаре");
+  if(!time) return toast("Укажите время");
   var btn=this; btn.disabled=true;
   api("POST","/api/admin/slots",{
-    date:date, time:time, direction:$("#sfDir").value, durationMin:Number($("#sfDur").value)
+    date:selDate, time:time, durationMin:Number($("#sfDur").value),
+    repeatWeeks:Number($("#sfRepeat").value)
   }).then(function(){ toast("Слот добавлен"); return refresh(); })
     .catch(function(e){ toast("Ошибка: "+e.message); })
     .finally(function(){ btn.disabled=false; });
@@ -469,7 +563,7 @@ window.openSheet=function(id){
   var phoneClean=(b.phone||"").replace(/[^\d+]/g,"");
   var waNum=phoneClean.replace(/[^\d]/g,"");
   var tg=(b.telegram||"").replace(/^@/,"");
-  var c='<h2>'+esc(b.name)+'</h2><div class="sub">'+cap(b.direction||"")+' · '+statusLbl(b.status)+'</div>'+
+  var c='<h2>'+esc(b.name)+'</h2><div class="sub">'+esc(b.package||"")+' · '+statusLbl(b.status)+'</div>'+
     '<div class="contacts">'+
       cbtn(phoneClean?("tel:"+phoneClean):null,"call","Звонок")+
       cbtn(phoneClean?("sms:"+phoneClean):null,"sms","iMessage")+
@@ -479,7 +573,8 @@ window.openSheet=function(id){
     '<div class="info">'+
       row("Телефон", b.phone||"—")+
       row("Telegram", b.telegram||"—")+
-      row("Направление", cap(b.direction||"—"))+
+      row("Занятие", b.package||"—")+
+      row("Стоимость", b.price?b.price+" ₽":"—")+
       row("Дата и время", fmtSlot(b))+
       row("Создана", fmtDate(b.createdAt))+
     '</div>'+

@@ -30,6 +30,38 @@ const { Driver, getCredentialsFromEnv, TypedValues } = require('ydb-sdk');
 
 const DIRECTIONS = ['вокал', 'фортепиано', 'сольфеджио', 'групповой вокал', 'хор', 'мастер-класс'];
 
+// Каталог пакетов из прайса. id используется формой (?pkg=...)
+const PACKAGES = {
+  'trial':      { title: 'Пробное занятие',                 dur: 50,  price: 2000 },
+  'single-50':  { title: 'Разовое занятие · 50 минут',      dur: 50,  price: 2800 },
+  'single-75':  { title: 'Разовое занятие · 1 ч 15 мин',    dur: 75,  price: 4200 },
+  'single-100': { title: 'Разовое занятие · 1 ч 40 мин',    dur: 100, price: 5200 },
+  'sub4-50':    { title: 'Абонемент 4 занятия по 50 минут', dur: 50,  price: 10400 },
+  'sub8-50':    { title: 'Абонемент 8 занятий по 50 минут', dur: 50,  price: 20000 },
+  'sub4-75':    { title: 'Абонемент 4 занятия по 1 ч 15 мин', dur: 75, price: 16000 },
+  'sub8-75':    { title: 'Абонемент 8 занятий по 1 ч 15 мин', dur: 75, price: 31200 },
+  'group-50':   { title: 'Групповой вокал · 50 минут',      dur: 50,  price: 2000 },
+  'group-100':  { title: 'Групповой вокал · 1 ч 40 мин',    dur: 100, price: 3500 },
+  'choir-once': { title: 'Хор · разовое занятие',           dur: 110, price: 2000 },
+  'choir-sub4': { title: 'Хор · абонемент на 4 занятия',    dur: 110, price: 7400 },
+  'mk':         { title: 'Мастер-класс · 1 ч 40 мин',       dur: 100, price: 3500 },
+};
+
+// «Сегодня» по Москве (UTC+3) и минимальная дата записи (за 2 дня)
+function mskToday() {
+  return new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+}
+function minBookingDate() {
+  const d = new Date(Date.now() + 3 * 3600e3);
+  d.setUTCDate(d.getUTCDate() + 2);
+  return d.toISOString().slice(0, 10);
+}
+function addMin(hhmm, min) {
+  const [h, m] = hhmm.split(':').map(Number);
+  const t = h * 60 + m + min;
+  return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+}
+
 let driver = null;
 async function getDriver() {
   if (driver) return driver;
@@ -94,7 +126,7 @@ async function sendTelegram(b) {
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const text = '🎵 <b>Новая заявка</b>\n\n👤 <b>' + esc(b.name) + '</b>\n📞 ' + esc(b.phone) +
     (b.telegram ? '\n✈️ ' + esc(b.telegram) : '') +
-    '\n🎼 Направление: ' + esc(b.direction) +
+    '\n🎼 ' + esc(b.direction) + (b.price ? ' · ' + b.price + ' ₽' : '') +
     '\n📅 ' + esc(b.slot_date) + ' в ' + esc(b.slot_time) +
     (b.comment ? '\n\n💬 ' + esc(b.comment) : '');
   try {
@@ -170,14 +202,14 @@ async function sendWebPush(b) {
 }
 
 /* ---------- handlers ---------- */
-async function publicSlots(qs) {
-  const today = new Date().toISOString().slice(0, 10);
+async function publicSlots() {
+  // все свободные слоты не раньше чем через 2 дня (по Москве)
   const rows = await query(
-    'DECLARE $dir AS Utf8; DECLARE $today AS Utf8;\n' +
-    'SELECT id, date, time, direction, duration_min, status FROM slots\n' +
-    'WHERE direction = $dir AND status = "free" AND date >= $today\n' +
+    'DECLARE $min AS Utf8;\n' +
+    'SELECT id, date, time, duration_min FROM slots\n' +
+    'WHERE status = "free" AND date >= $min\n' +
     'ORDER BY date, time;',
-    { $dir: TypedValues.utf8(qs.direction || ''), $today: TypedValues.utf8(today) }
+    { $min: TypedValues.utf8(minBookingDate()) }
   );
   return { code: 200, body: rows[0] };
 }
@@ -187,38 +219,60 @@ async function createBooking(data) {
   const phone = String(data.phone || '').trim();
   if (name.length < 2 || name.length > 120) return { code: 400, body: { error: 'Укажите имя' } };
   if (phone.replace(/\D/g, '').length < 11 || phone.length > 40) return { code: 400, body: { error: 'Укажите телефон' } };
-  if (!DIRECTIONS.includes(data.direction)) return { code: 400, body: { error: 'Неверное направление' } };
   if (String(data.comment || '').length > 2000) return { code: 400, body: { error: 'Слишком длинный комментарий' } };
-  const slotId = String(data.slotId || '');
+  const pkg = PACKAGES[String(data.package || '')];
+  if (!pkg) return { code: 400, body: { error: 'Неверный пакет' } };
+  const slotIds = Array.isArray(data.slotIds) ? data.slotIds.map(String).slice(0, 2)
+    : data.slotId ? [String(data.slotId)] : [];
+  if (!slotIds.length) return { code: 400, body: { error: 'Выберите время' } };
 
-  // слот должен существовать и быть свободным — берём его в hold, чтобы
-  // второй клиент не записался на то же время
-  const slot = (await query(
-    'DECLARE $id AS Utf8; SELECT id, date, time, status FROM slots WHERE id = $id;',
-    { $id: TypedValues.utf8(slotId) }
-  ))[0][0];
-  if (!slot) return { code: 400, body: { error: 'Слот не найден' } };
-  if (slot.status !== 'free') return { code: 409, body: { error: 'Этот слот уже заняли — выберите другое время' } };
+  // слоты должны существовать, быть свободными, на одной дате и (для пары) идти подряд
+  const slots = [];
+  for (const sid of slotIds) {
+    const s = (await query(
+      'DECLARE $id AS Utf8; SELECT id, date, time, duration_min, status FROM slots WHERE id = $id;',
+      { $id: TypedValues.utf8(sid) }))[0][0];
+    if (!s) return { code: 400, body: { error: 'Слот не найден' } };
+    if (s.status !== 'free') return { code: 409, body: { error: 'Это время уже заняли — выберите другое' } };
+    slots.push(s);
+  }
+  slots.sort((a, b) => (a.time < b.time ? -1 : 1));
+  if (slots[0].date < minBookingDate())
+    return { code: 400, body: { error: 'Запись возможна не позднее чем за 2 дня' } };
+  if (slots.length === 2) {
+    if (slots[0].date !== slots[1].date) return { code: 400, body: { error: 'Слоты должны быть в один день' } };
+    if (addMin(slots[0].time, Number(slots[0].duration_min) || 50) !== slots[1].time)
+      return { code: 400, body: { error: 'Слоты должны идти подряд' } };
+  }
+  const totalDur = slots.reduce((a, s) => a + (Number(s.duration_min) || 50), 0);
+  if (totalDur < pkg.dur) return { code: 400, body: { error: 'Выбранного времени не хватает для этого занятия' } };
 
   const id = crypto.randomUUID();
   await query(
-    'DECLARE $id AS Utf8; DECLARE $slot_id AS Utf8; DECLARE $direction AS Utf8;\n' +
+    'DECLARE $id AS Utf8; DECLARE $slot_id AS Utf8; DECLARE $slot_id2 AS Utf8;\n' +
+    'DECLARE $direction AS Utf8; DECLARE $package AS Utf8; DECLARE $price AS Uint32;\n' +
+    'DECLARE $dur AS Uint32;\n' +
     'DECLARE $name AS Utf8; DECLARE $phone AS Utf8; DECLARE $telegram AS Utf8;\n' +
     'DECLARE $comment AS Utf8; DECLARE $slot_date AS Utf8; DECLARE $slot_time AS Utf8;\n' +
     'DECLARE $created AS Uint64;\n' +
-    'UPDATE slots SET status = "hold" WHERE id = $slot_id AND status = "free";\n' +
-    'UPSERT INTO bookings (id, slot_id, direction, name, phone, telegram, comment, status, slot_date, slot_time, created_at)\n' +
-    'VALUES ($id, $slot_id, $direction, $name, $phone, $telegram, $comment, "pending", $slot_date, $slot_time, $created);',
+    'UPDATE slots SET status = "hold" WHERE id IN ($slot_id, $slot_id2) AND status = "free";\n' +
+    'UPSERT INTO bookings (id, slot_id, slot_id2, direction, package, price, duration_min, name, phone, telegram, comment, status, slot_date, slot_time, created_at)\n' +
+    'VALUES ($id, $slot_id, $slot_id2, $direction, $package, $price, $dur, $name, $phone, $telegram, $comment, "pending", $slot_date, $slot_time, $created);',
     {
-      $id: TypedValues.utf8(id), $slot_id: TypedValues.utf8(slotId),
-      $direction: TypedValues.utf8(data.direction), $name: TypedValues.utf8(name),
-      $phone: TypedValues.utf8(phone), $telegram: TypedValues.utf8(String(data.telegram || '')),
+      $id: TypedValues.utf8(id), $slot_id: TypedValues.utf8(slots[0].id),
+      $slot_id2: TypedValues.utf8(slots[1] ? slots[1].id : ''),
+      $direction: TypedValues.utf8(String(data.direction || '')),
+      $package: TypedValues.utf8(pkg.title), $price: TypedValues.uint32(pkg.price),
+      $dur: TypedValues.uint32(pkg.dur),
+      $name: TypedValues.utf8(name), $phone: TypedValues.utf8(phone),
+      $telegram: TypedValues.utf8(String(data.telegram || '')),
       $comment: TypedValues.utf8(String(data.comment || '')),
-      $slot_date: TypedValues.utf8(slot.date), $slot_time: TypedValues.utf8(slot.time),
+      $slot_date: TypedValues.utf8(slots[0].date), $slot_time: TypedValues.utf8(slots[0].time),
       $created: TypedValues.uint64(Date.now()),
     }
   );
-  const notice = { name, phone, telegram: data.telegram, comment: data.comment, direction: data.direction, slot_date: slot.date, slot_time: slot.time };
+  const notice = { name, phone, telegram: data.telegram, comment: data.comment,
+    direction: pkg.title, slot_date: slots[0].date, slot_time: slots[0].time, price: pkg.price };
   await sendTelegram(notice);
   try { await sendWebPush(notice); } catch (e) { console.warn('push', e); }
   return { code: 200, body: { ok: true, id } };
@@ -230,27 +284,27 @@ async function adminBookings() {
 }
 
 async function patchBooking(id, data) {
-  const b = (await query('DECLARE $id AS Utf8; SELECT id, slot_id FROM bookings WHERE id = $id;',
+  const b = (await query('DECLARE $id AS Utf8; SELECT id, slot_id, slot_id2 FROM bookings WHERE id = $id;',
     { $id: TypedValues.utf8(id) }))[0][0];
   if (!b) return { code: 404, body: { error: 'Заявка не найдена' } };
 
   if (data.delete) {
     await query(
-      'DECLARE $id AS Utf8; DECLARE $slot AS Utf8;\n' +
+      'DECLARE $id AS Utf8; DECLARE $slot AS Utf8; DECLARE $slot2 AS Utf8;\n' +
       'DELETE FROM bookings WHERE id = $id;\n' +
-      'UPDATE slots SET status = "free" WHERE id = $slot AND status != "free";',
-      { $id: TypedValues.utf8(id), $slot: TypedValues.utf8(b.slot_id || '') });
+      'UPDATE slots SET status = "free" WHERE id IN ($slot, $slot2) AND status != "free";',
+      { $id: TypedValues.utf8(id), $slot: TypedValues.utf8(b.slot_id || ''), $slot2: TypedValues.utf8(b.slot_id2 || '') });
     return { code: 200, body: { ok: true } };
   }
   const status = data.status;
   if (!['pending', 'confirmed', 'cancelled'].includes(status)) return { code: 400, body: { error: 'Неверный статус' } };
   const slotStatus = status === 'confirmed' ? 'booked' : status === 'cancelled' ? 'free' : 'hold';
   await query(
-    'DECLARE $id AS Utf8; DECLARE $st AS Utf8; DECLARE $slot AS Utf8; DECLARE $sst AS Utf8;\n' +
+    'DECLARE $id AS Utf8; DECLARE $st AS Utf8; DECLARE $slot AS Utf8; DECLARE $slot2 AS Utf8; DECLARE $sst AS Utf8;\n' +
     'UPDATE bookings SET status = $st WHERE id = $id;\n' +
-    'UPDATE slots SET status = $sst WHERE id = $slot;',
+    'UPDATE slots SET status = $sst WHERE id IN ($slot, $slot2);',
     { $id: TypedValues.utf8(id), $st: TypedValues.utf8(status),
-      $slot: TypedValues.utf8(b.slot_id || ''), $sst: TypedValues.utf8(slotStatus) });
+      $slot: TypedValues.utf8(b.slot_id || ''), $slot2: TypedValues.utf8(b.slot_id2 || ''), $sst: TypedValues.utf8(slotStatus) });
   return { code: 200, body: { ok: true } };
 }
 
@@ -264,7 +318,6 @@ async function createSlots(data) {
   // серию еженедельных слотов (удобство для регулярного расписания)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data.date || ''))) return { code: 400, body: { error: 'Неверная дата' } };
   if (!/^\d{2}:\d{2}$/.test(String(data.time || ''))) return { code: 400, body: { error: 'Неверное время' } };
-  if (!DIRECTIONS.includes(data.direction)) return { code: 400, body: { error: 'Неверное направление' } };
   const weeks = Math.min(Math.max(Number(data.repeatWeeks) || 1, 1), 12);
   const base = new Date(data.date + 'T00:00:00');
   for (let w = 0; w < weeks; w++) {
@@ -276,7 +329,7 @@ async function createSlots(data) {
       'UPSERT INTO slots (id, date, time, direction, duration_min, status, created_at)\n' +
       'VALUES ($id, $date, $time, $dir, $dur, "free", $created);',
       { $id: TypedValues.utf8(crypto.randomUUID()), $date: TypedValues.utf8(ds),
-        $time: TypedValues.utf8(data.time), $dir: TypedValues.utf8(data.direction),
+        $time: TypedValues.utf8(data.time), $dir: TypedValues.utf8(String(data.direction || '')),
         $dur: TypedValues.uint32(Number(data.durationMin) || 50), $created: TypedValues.uint64(Date.now()) });
   }
   return { code: 200, body: { ok: true, created: weeks } };
