@@ -224,7 +224,10 @@ async function deleteSlot(id) {
 /* ---------- router ---------- */
 module.exports.handler = async function (event) {
   const method = (event.httpMethod || 'GET').toUpperCase();
-  const path = (event.path || event.url || '/').split('?')[0].replace(/\/+$/, '');
+  const rawPath = (event.url && !event.url.includes('{')) ? event.url
+    : (event.path && !event.path.includes('{')) ? event.path
+    : (event.requestContext && event.requestContext.path) || event.url || event.path || '/';
+  const path = rawPath.split('?')[0].replace(/\/+$/, '');
   const qs = event.queryStringParameters || {};
   const headers = event.headers || {};
   let data = {};
