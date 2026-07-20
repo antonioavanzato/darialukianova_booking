@@ -1,7 +1,6 @@
-<!-- ФОРМА ЗАЯВКИ — Дарья Лукьянова (версия для Yandex Cloud API) -->
-<!-- Полный блок для вставки на Wfolio. Данные ходят через свой API
-     (Cloud Function + YDB в РФ), Firebase SDK и Apps Script не нужны.
-     Разметка и стили — прежние. -->
+<!-- ФОРМА ЗАПИСИ ПО КАЛЕНДАРЮ — Дарья Лукьянова (Yandex Cloud API) -->
+<!-- Полный блок для вставки на Wfolio. Открывается со страницы прайса
+     ссылками вида  <адрес-страницы-формы>?pkg=trial  (см. список id в PACKAGES). -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet"/>
@@ -30,7 +29,7 @@
 .cvh-booking .step-sub{font-size:14px;color:var(--gray);margin-bottom:20px;}
 .cvh-booking .cat{font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--gray);
   margin:4px 2px 12px;}
-.cvh-booking .cat+.cat,.cvh-booking .opt+.cat{margin-top:26px;}
+.cvh-booking .opt+.cat{margin-top:26px;}
 
 .cvh-booking .steps{display:flex;gap:6px;margin-bottom:24px;}
 .cvh-booking .steps .dot{flex:1;height:3px;border-radius:999px;background:var(--line-10);transition:.4s var(--ease);}
@@ -41,25 +40,52 @@
 @keyframes cvhFade{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
 
 .cvh-booking .opt{width:100%;text-align:left;background:var(--white);border:1px solid var(--line-10);
-  border-radius:var(--r);padding:18px 20px;margin-bottom:12px;display:flex;align-items:center;gap:16px;
+  border-radius:var(--r);padding:16px 20px;margin-bottom:10px;display:flex;align-items:center;gap:16px;
   transition:.35s var(--ease);color:var(--ink);}
 .cvh-booking .opt:hover{border-color:var(--line-20);}
 .cvh-booking .opt:active{transform:scale(.99);}
-.cvh-booking .opt.sel{border-color:var(--ink);box-shadow:0 0 0 3px rgba(29,29,31,.05);}
-.cvh-booking .opt .ic{width:46px;height:46px;border-radius:999px;border:1px solid var(--line-10);
-  display:flex;align-items:center;justify-content:center;flex:none;}
-.cvh-booking .opt .ic .material-symbols-outlined{font-size:24px;}
-.cvh-booking .opt .t{font-size:17px;font-weight:500;}
+.cvh-booking .opt .t{font-size:16px;font-weight:500;}
 .cvh-booking .opt .s{font-size:13px;color:var(--gray);margin-top:2px;}
+.cvh-booking .opt .p{margin-left:auto;font-size:16px;font-weight:500;white-space:nowrap;}
 
-.cvh-booking .slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;}
-.cvh-booking .chip{background:var(--white);border:1px solid var(--line-10);border-radius:18px;padding:14px 10px;
+/* выбранный пакет */
+.cvh-booking .pkg-chip{display:flex;align-items:center;gap:14px;background:var(--ink);color:#fff;
+  border-radius:var(--r);padding:16px 20px;margin-bottom:20px;}
+.cvh-booking .pkg-chip .ic{width:42px;height:42px;border-radius:999px;background:rgba(255,255,255,.14);
+  display:flex;align-items:center;justify-content:center;flex:none;}
+.cvh-booking .pkg-chip .t{font-size:15px;font-weight:500;line-height:1.3;}
+.cvh-booking .pkg-chip .s{font-size:12px;opacity:.65;margin-top:2px;}
+.cvh-booking .pkg-chip .p{margin-left:auto;font-size:17px;font-weight:500;white-space:nowrap;}
+.cvh-booking .pkg-chip .chg{background:none;border:none;color:#fff;opacity:.6;padding:4px;margin-left:6px;}
+.cvh-booking .pkg-chip .chg:hover{opacity:1;}
+
+/* календарь */
+.cvh-booking .cal{background:var(--white);border:1px solid var(--line-10);border-radius:var(--r);padding:18px;margin-bottom:16px;}
+.cvh-booking .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.cvh-booking .cal-head .m{font-size:16px;font-weight:500;text-transform:capitalize;}
+.cvh-booking .cal-nav{width:38px;height:38px;border-radius:999px;border:1px solid var(--line-10);background:var(--white);
+  display:flex;align-items:center;justify-content:center;color:var(--ink);}
+.cvh-booking .cal-nav:disabled{opacity:.3;pointer-events:none;}
+.cvh-booking .cal-dow{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:6px;}
+.cvh-booking .cal-dow div{text-align:center;font-size:11px;color:var(--gray);font-weight:500;padding:4px 0;}
+.cvh-booking .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.cvh-booking .cal-day{aspect-ratio:1;border:none;background:transparent;border-radius:14px;font-size:15px;
+  display:flex;align-items:center;justify-content:center;color:var(--line-20);position:relative;transition:.25s var(--ease);}
+.cvh-booking .cal-day.av{color:var(--ink);background:var(--stone-100);font-weight:500;cursor:pointer;}
+.cvh-booking .cal-day.av:hover{background:var(--stone-200);}
+.cvh-booking .cal-day.av::after{content:"";position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
+  width:4px;height:4px;border-radius:999px;background:var(--green);}
+.cvh-booking .cal-day.sel{background:var(--ink);color:#fff;}
+.cvh-booking .cal-day.sel::after{background:#fff;}
+.cvh-booking .cal-note{font-size:12px;color:var(--gray);text-align:center;margin-top:10px;}
+
+.cvh-booking .slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;}
+.cvh-booking .chip{background:var(--white);border:1px solid var(--line-10);border-radius:18px;padding:13px 10px;
   text-align:center;transition:.3s var(--ease);color:var(--ink);}
 .cvh-booking .chip:active{transform:scale(.97);}
 .cvh-booking .chip.sel{border-color:var(--ink);box-shadow:0 0 0 3px rgba(29,29,31,.05);}
 .cvh-booking .chip .cd{font-size:15px;font-weight:500;}
-.cvh-booking .chip .ct{font-size:13px;color:var(--gray);margin-top:2px;}
-.cvh-booking .chip .cdur{font-size:11px;color:var(--gray);margin-top:4px;}
+.cvh-booking .chip .ct{font-size:12px;color:var(--gray);margin-top:3px;}
 
 .cvh-booking .fld{margin-bottom:14px;}
 .cvh-booking .fld label{display:block;font-size:12px;font-weight:500;color:var(--gray);margin-bottom:7px;}
@@ -85,7 +111,7 @@
 
 .cvh-booking .btn{position:relative;overflow:hidden;isolation:isolate;display:inline-flex;align-items:center;
   justify-content:center;gap:8px;padding:15px 26px;border-radius:999px;border:1px solid var(--line-20);
-  font-size:15px;font-weight:500;color:var(--ink);background:transparent;transition:.45s var(--ease);}
+  font-size:15px;font-weight:500;color:var(--ink);background:transparent;transition:.45s var(--ease);text-decoration:none;}
 .cvh-booking .btn::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--ink);
   transform:translateX(-101%);transition:transform .45s var(--ease);}
 .cvh-booking .btn.primary{color:var(--white);border-color:var(--ink);}
@@ -96,17 +122,20 @@
 .cvh-booking .nav{display:flex;gap:10px;margin-top:8px;}
 .cvh-booking .nav .btn{flex:1;}
 
-.cvh-booking .hint{text-align:center;padding:40px 20px;color:var(--gray);font-size:14px;}
+.cvh-booking .hint{text-align:center;padding:36px 20px;color:var(--gray);font-size:14px;}
 .cvh-booking .hint .material-symbols-outlined{font-size:38px;opacity:.4;display:block;margin-bottom:10px;}
 .cvh-booking .err{color:var(--red);font-size:13px;margin-top:10px;min-height:18px;text-align:center;}
 
-.cvh-booking .done{text-align:center;padding:34px 20px;}
+.cvh-booking .done{text-align:center;padding:28px 10px;}
 .cvh-booking .done .check{width:72px;height:72px;border-radius:999px;background:var(--ink);color:#fff;
   display:flex;align-items:center;justify-content:center;margin:0 auto 20px;animation:cvhPop .5s var(--ease);}
 .cvh-booking .done .check .material-symbols-outlined{font-size:38px;}
 @keyframes cvhPop{from{transform:scale(.5);opacity:0;}to{transform:scale(1);opacity:1;}}
-.cvh-booking .done h2{font-size:26px;margin-bottom:10px;}
-.cvh-booking .done p{color:var(--gray);font-size:15px;max-width:340px;margin:0 auto;}
+.cvh-booking .done h2{font-size:24px;margin-bottom:12px;}
+.cvh-booking .done .msg{color:var(--ink-80);font-size:15px;max-width:380px;margin:0 auto;line-height:1.6;}
+.cvh-booking .done .msg b{font-weight:500;}
+.cvh-booking .done .note{color:var(--gray);font-size:14px;max-width:360px;margin:14px auto 0;}
+.cvh-booking .done .acts{display:flex;flex-direction:column;gap:10px;max-width:340px;margin:26px auto 0;}
 
 .cvh-booking .spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);
   border-top-color:#fff;border-radius:999px;animation:cvhSp .7s linear infinite;}
@@ -122,46 +151,34 @@
     <div class="dot" data-d="2"></div>
   </div>
 
-  <div class="pane on" id="cvhPane0">
-    <h2 class="step-ttl">Направление</h2>
-    <div class="step-sub">Выберите, чем хотите заниматься</div>
-
-    <div class="cat">Индивидуальные</div>
-    <button class="opt" data-dir="вокал">
-      <span class="ic"><span class="material-symbols-outlined">mic</span></span>
-      <div><div class="t">Вокал</div><div class="s">Постановка голоса, дыхание</div></div>
-    </button>
-    <button class="opt" data-dir="фортепиано">
-      <span class="ic"><span class="material-symbols-outlined">piano</span></span>
-      <div><div class="t">Фортепиано</div><div class="s">Игра и техника</div></div>
-    </button>
-    <button class="opt" data-dir="сольфеджио">
-      <span class="ic"><span class="material-symbols-outlined">music_note</span></span>
-      <div><div class="t">Сольфеджио</div><div class="s">Музыкальная теория и слух</div></div>
-    </button>
-
-    <div class="cat">Групповые</div>
-    <button class="opt" data-dir="групповой вокал">
-      <span class="ic"><span class="material-symbols-outlined">groups</span></span>
-      <div><div class="t">Групповой вокал</div><div class="s">Ансамбль, многоголосие · от 2 человек</div></div>
-    </button>
-    <button class="opt" data-dir="хор">
-      <span class="ic"><span class="material-symbols-outlined">diversity_3</span></span>
-      <div><div class="t">Хор</div><div class="s">Еженедельные занятия · от 3 человек</div></div>
-    </button>
-    <button class="opt" data-dir="мастер-класс">
-      <span class="ic"><span class="material-symbols-outlined">co_present</span></span>
-      <div><div class="t">Мастер-класс</div><div class="s">Разовое занятие в компании · от 2 человек</div></div>
-    </button>
+  <!-- 0. Пакет (показывается, если не пришли с прайса с ?pkg=) -->
+  <div class="pane" id="cvhPane0">
+    <h2 class="step-ttl">Что выбираем?</h2>
+    <div class="step-sub">Формат и длительность занятия</div>
+    <div id="cvhPkgList"></div>
   </div>
 
+  <!-- 1. Календарь -->
   <div class="pane" id="cvhPane1">
+    <div id="cvhPkgChip"></div>
     <h2 class="step-ttl">Дата и время</h2>
-    <div class="step-sub">Свободные слоты по выбранному направлению</div>
+    <div class="step-sub">Зелёная точка — есть свободное время</div>
+    <div class="cal">
+      <div class="cal-head">
+        <button class="cal-nav" id="cvhPrev"><span class="material-symbols-outlined">chevron_left</span></button>
+        <div class="m" id="cvhMonth"></div>
+        <button class="cal-nav" id="cvhNext"><span class="material-symbols-outlined">chevron_right</span></button>
+      </div>
+      <div class="cal-dow"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div></div>
+      <div class="cal-grid" id="cvhGrid"></div>
+      <div class="cal-note">Запись возможна не позднее чем за 2 дня (время московское)</div>
+    </div>
     <div class="slot-grid" id="cvhSlots"></div>
     <div class="nav"><button class="btn" id="cvhBack1"><span class="material-symbols-outlined">arrow_back</span>Назад</button></div>
+    <div class="err" id="cvhErr1"></div>
   </div>
 
+  <!-- 2. Контакты -->
   <div class="pane" id="cvhPane2">
     <h2 class="step-ttl">Ваши контакты</h2>
     <div class="step-sub">Дарья свяжется с вами для подтверждения</div>
@@ -185,11 +202,17 @@
     <div class="err" id="cvhErr"></div>
   </div>
 
+  <!-- 3. Готово -->
   <div class="pane" id="cvhPane3">
     <div class="done">
       <div class="check"><span class="material-symbols-outlined">check</span></div>
-      <h2>Заявка отправлена</h2>
-      <p>Спасибо! Дарья получила вашу заявку и свяжется с вами в ближайшее время для подтверждения.</p>
+      <h2>Вы записаны!</h2>
+      <p class="msg" id="cvhDoneMsg"></p>
+      <p class="note">Даша с вами свяжется для уточнения вашей брони за 48 часов до занятия.</p>
+      <div class="acts">
+        <button class="btn primary" id="cvhIcs"><span class="material-symbols-outlined">event</span>Добавить в календарь</button>
+        <a class="btn" id="cvhRoute" target="_blank" rel="noopener"><span class="material-symbols-outlined">near_me</span>Построить маршрут</a>
+      </div>
     </div>
   </div>
 </div>
@@ -198,13 +221,47 @@
 (function(){
 var API_URL = "https://d5dfvqmsv02vbpei383a.uvah0e6r.apigw.yandexcloud.net";
 
+/* Пакеты — в точности как в прайсе. id совпадают с бэкендом. */
+var PACKAGES = {
+  "trial":      { title:"Пробное занятие",                  dur:50,  price:2000,  group:"Индивидуальные" },
+  "single-50":  { title:"Разовое занятие · 50 минут",       dur:50,  price:2800,  group:"Индивидуальные" },
+  "single-75":  { title:"Разовое занятие · 1 ч 15 мин",     dur:75,  price:4200,  group:"Индивидуальные" },
+  "single-100": { title:"Разовое занятие · 1 ч 40 мин",     dur:100, price:5200,  group:"Индивидуальные" },
+  "sub4-50":    { title:"Абонемент 4 занятия по 50 минут",  dur:50,  price:10400, group:"Абонементы" },
+  "sub8-50":    { title:"Абонемент 8 занятий по 50 минут",  dur:50,  price:20000, group:"Абонементы" },
+  "sub4-75":    { title:"Абонемент 4 занятия по 1 ч 15 мин",dur:75,  price:16000, group:"Абонементы" },
+  "sub8-75":    { title:"Абонемент 8 занятий по 1 ч 15 мин",dur:75,  price:31200, group:"Абонементы" },
+  "group-50":   { title:"Групповой вокал · 50 минут",       dur:50,  price:2000,  group:"Групповые" },
+  "group-100":  { title:"Групповой вокал · 1 ч 40 мин",     dur:100, price:3500,  group:"Групповые" },
+  "choir-once": { title:"Хор · разовое занятие",            dur:110, price:2000,  group:"Групповые" },
+  "choir-sub4": { title:"Хор · абонемент на 4 занятия",     dur:110, price:7400,  group:"Групповые" },
+  "mk":         { title:"Мастер-класс · 1 ч 40 мин",        dur:100, price:3500,  group:"Групповые" }
+};
+var PLACE_NAME = "Арт-коворкинг Вивальди";
+var ROUTE_URL = "https://yandex.ru/maps/?text=" + encodeURIComponent(PLACE_NAME + " Казань");
+
 var DOW=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+var DOW_FULL=["воскресенье","понедельник","вторник","среда","четверг","пятница","суббота"];
 var MON=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
+var MON_FULL=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
 var root=document.getElementById("cvhBooking");
 var $=function(s){return root.querySelector(s);};
 
-var state={ direction:null, slot:null };
-var allSlots=[];
+var state={ pkg:null, pkgId:null, date:null, option:null, month:null };
+var slotsByDate={}; // date -> [{id,time,dur}]
+var booked=null;
+
+/* ---------- Москва: сегодня и минимальная дата ---------- */
+function mskNow(){ return new Date(Date.now() + 3*3600e3); }
+function ymd(d){ return d.toISOString().slice(0,10); }
+function minDate(){ var d=mskNow(); d.setUTCDate(d.getUTCDate()+2); return ymd(d); }
+function parseDate(s){ var p=String(s).split("-"); return new Date(+p[0],(+p[1]-1),+p[2]); }
+function addMin(t,m){ var p=t.split(":"), x=(+p[0])*60+(+p[1])+m;
+  return ("0"+Math.floor(x/60)).slice(-2)+":"+("0"+(x%60)).slice(-2); }
+function fmtDur(m){ m=Number(m)||50; var h=Math.floor(m/60), mm=m%60;
+  return (h?h+" ч"+(mm?" ":""):"")+(mm?mm+" мин":(h?"":"0 мин")); }
+function fmtPrice(p){ return String(p).replace(/\B(?=(\d{3})+(?!\d))/g,"."); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
 
 function go(step){
   for(var i=0;i<=3;i++){
@@ -217,65 +274,139 @@ function go(step){
   try{ root.scrollIntoView({behavior:"smooth",block:"start"}); }catch(e){}
 }
 
-$("#cvhPane0").querySelectorAll(".opt").forEach(function(b){
-  b.onclick=function(){
-    state.direction=b.dataset.dir; state.slot=null;
-    $("#cvhPane0").querySelectorAll(".opt").forEach(function(x){x.classList.remove("sel");});
-    b.classList.add("sel");
-    loadSlots();
-    go(1);
-  };
-});
+/* ---------- 0. выбор пакета ---------- */
+function renderPkgList(){
+  var groups={}; Object.keys(PACKAGES).forEach(function(id){
+    var g=PACKAGES[id].group; (groups[g]=groups[g]||[]).push(id);
+  });
+  var html="";
+  Object.keys(groups).forEach(function(g){
+    html+='<div class="cat">'+esc(g)+'</div>';
+    groups[g].forEach(function(id){
+      var p=PACKAGES[id];
+      html+='<button class="opt" data-pkg="'+id+'"><div><div class="t">'+esc(p.title)+'</div>'+
+        '<div class="s">'+fmtDur(p.dur)+'</div></div><div class="p">'+fmtPrice(p.price)+'&nbsp;₽</div></button>';
+    });
+  });
+  $("#cvhPkgList").innerHTML=html;
+  $("#cvhPkgList").querySelectorAll(".opt").forEach(function(b){
+    b.onclick=function(){ selectPkg(b.dataset.pkg); };
+  });
+}
+function selectPkg(id){
+  if(!PACKAGES[id]) return;
+  state.pkgId=id; state.pkg=PACKAGES[id]; state.date=null; state.option=null;
+  $("#cvhPkgChip").innerHTML='<div class="pkg-chip"><span class="ic"><span class="material-symbols-outlined">music_note</span></span>'+
+    '<div><div class="t">'+esc(state.pkg.title)+'</div><div class="s">'+fmtDur(state.pkg.dur)+'</div></div>'+
+    '<div class="p">'+fmtPrice(state.pkg.price)+'&nbsp;₽</div>'+
+    '<button class="chg" id="cvhChg" title="Выбрать другое"><span class="material-symbols-outlined">edit</span></button></div>';
+  $("#cvhChg").onclick=function(){ go(0); };
+  loadSlots();
+  go(1);
+}
 
+/* ---------- слоты и варианты старта ---------- */
 function loadSlots(){
-  var el=$("#cvhSlots");
-  el.innerHTML='<div class="hint"><span class="material-symbols-outlined">hourglass_empty</span>Загрузка…</div>';
-  fetch(API_URL+"/api/slots?direction="+encodeURIComponent(state.direction))
+  $("#cvhSlots").innerHTML="";
+  $("#cvhGrid").innerHTML='<div class="hint" style="grid-column:1/-1;"><span class="material-symbols-outlined">hourglass_empty</span>Загрузка…</div>';
+  fetch(API_URL+"/api/slots")
     .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
     .then(function(list){
-      allSlots=list.map(function(s){
-        return { id:s.id, date:s.date, time:s.time, durationMin:Number(s.duration_min)||50 };
+      slotsByDate={};
+      list.forEach(function(s){
+        var d=s.date; (slotsByDate[d]=slotsByDate[d]||[]).push({id:s.id,time:s.time,dur:Number(s.duration_min)||50});
       });
-      renderSlots();
+      Object.keys(slotsByDate).forEach(function(d){ slotsByDate[d].sort(function(a,b){return a.time<b.time?-1:1;}); });
+      if(!state.month){ var n=mskNow(); state.month=[n.getUTCFullYear(), n.getUTCMonth()]; }
+      renderCal();
     })
-    .catch(function(e){
-      el.innerHTML='<div class="hint"><span class="material-symbols-outlined">error</span>Не удалось загрузить слоты</div>';
-      console.error(e);
+    .catch(function(){
+      $("#cvhGrid").innerHTML='<div class="hint" style="grid-column:1/-1;"><span class="material-symbols-outlined">error</span>Не удалось загрузить расписание</div>';
     });
 }
-function renderSlots(){
-  var el=$("#cvhSlots");
-  if(!allSlots.length){
-    el.innerHTML='<div class="hint"><span class="material-symbols-outlined">event_busy</span>Свободных слотов по этому направлению пока нет</div>';
-    return;
+/* варианты начала занятия на дату: одинарный слот подходящей длины
+   или два подряд идущих слота (двойное занятие) */
+function startOptions(date){
+  var slots=slotsByDate[date]||[], D=state.pkg.dur, out=[];
+  for(var i=0;i<slots.length;i++){
+    var a=slots[i];
+    if(a.dur>=D){ out.push({ids:[a.id], time:a.time, total:a.dur}); continue; }
+    var b=slots[i+1];
+    if(b && b.time===addMin(a.time,a.dur) && a.dur+b.dur>=D)
+      out.push({ids:[a.id,b.id], time:a.time, total:a.dur+b.dur});
   }
-  el.innerHTML=allSlots.map(function(s){
-    var d=parseDate(s.date);
-    return '<button class="chip" data-id="'+s.id+'">'+
-      '<div class="cd">'+d.getDate()+' '+MON[d.getMonth()]+'</div>'+
-      '<div class="ct">'+DOW[d.getDay()]+' · '+s.time+'</div>'+
-      '<div class="cdur">'+fmtDur(s.durationMin)+'</div></button>';
+  return out;
+}
+function availableDates(){
+  var min=minDate(), out={};
+  Object.keys(slotsByDate).forEach(function(d){
+    if(d>=min && startOptions(d).length) out[d]=true;
+  });
+  return out;
+}
+
+/* ---------- календарь ---------- */
+function renderCal(){
+  var y=state.month[0], m=state.month[1];
+  var av=availableDates();
+  var monthName=MON_FULL[m].replace(/[ая]$/,function(c){return c==="я"?"ь":c;});
+  $("#cvhMonth").textContent=["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"][m]+" "+y;
+  var first=new Date(Date.UTC(y,m,1));
+  var startDow=(first.getUTCDay()+6)%7; // Пн=0
+  var days=new Date(Date.UTC(y,m+1,0)).getUTCDate();
+  var html="";
+  for(var i=0;i<startDow;i++) html+="<div></div>";
+  for(var d=1;d<=days;d++){
+    var ds=y+"-"+("0"+(m+1)).slice(-2)+"-"+("0"+d).slice(-2);
+    var cls="cal-day"+(av[ds]?" av":"")+(state.date===ds?" sel":"");
+    html+='<button class="'+cls+'" data-d="'+ds+'"'+(av[ds]?"":" disabled")+'>'+d+"</button>";
+  }
+  $("#cvhGrid").innerHTML=html;
+  var now=mskNow();
+  $("#cvhPrev").disabled = (y<now.getUTCFullYear()) || (y===now.getUTCFullYear() && m<=now.getUTCMonth());
+  $("#cvhGrid").querySelectorAll(".cal-day.av").forEach(function(b){
+    b.onclick=function(){
+      state.date=b.dataset.d; state.option=null;
+      renderCal(); renderTimes();
+    };
+  });
+  if(state.date && !av[state.date]){ state.date=null; $("#cvhSlots").innerHTML=""; }
+}
+$("#cvhPrev").onclick=function(){ var m=state.month; state.month=m[1]?[m[0],m[1]-1]:[m[0]-1,11]; renderCal(); };
+$("#cvhNext").onclick=function(){ var m=state.month; state.month=m[1]<11?[m[0],m[1]+1]:[m[0]+1,0]; renderCal(); };
+
+function renderTimes(){
+  var opts=startOptions(state.date), el=$("#cvhSlots");
+  if(!opts.length){ el.innerHTML=""; return; }
+  el.innerHTML=opts.map(function(o,i){
+    return '<button class="chip" data-i="'+i+'">'+
+      '<div class="cd">'+o.time+"–"+addMin(o.time,state.pkg.dur)+'</div>'+
+      '<div class="ct">'+(o.ids.length>1?"двойной слот":"")+'</div></button>';
   }).join("");
   el.querySelectorAll(".chip").forEach(function(c){
     c.onclick=function(){
-      state.slot=allSlots.find(function(x){return x.id===c.dataset.id;});
+      state.option=opts[Number(c.dataset.i)];
       el.querySelectorAll(".chip").forEach(function(x){x.classList.remove("sel");});
       c.classList.add("sel");
       renderSummary();
       go(2);
     };
   });
+  try{ el.scrollIntoView({behavior:"smooth",block:"nearest"}); }catch(e){}
 }
 
 function renderSummary(){
-  var d=parseDate(state.slot.date);
+  var d=parseDate(state.date);
   $("#cvhSummary").innerHTML=
-    row("Направление", cap(state.direction))+
-    row("Дата", DOW[d.getDay()]+', '+d.getDate()+' '+MON[d.getMonth()]+' · '+state.slot.time)+
-    row("Длительность", fmtDur(state.slot.durationMin));
+    row("Занятие", state.pkg.title)+
+    row("Стоимость", fmtPrice(state.pkg.price)+" ₽")+
+    row("Дата", DOW[d.getDay()]+", "+d.getDate()+" "+MON[d.getMonth()])+
+    row("Время (мск)", state.option.time+"–"+addMin(state.option.time,state.pkg.dur))+
+    row("Длительность", fmtDur(state.pkg.dur));
 }
+function row(k,v){ return '<div class="r"><span class="k">'+esc(k)+'</span><span class="v">'+esc(v)+'</span></div>'; }
 
-/* ---------- телефон: автоподстановка +7 и маска ---------- */
+/* ---------- телефон ---------- */
 var phoneEl=$("#cvhPhone");
 function fmtPhone(v){
   var d=String(v).replace(/\D/g,"");
@@ -294,6 +425,7 @@ phoneEl.addEventListener("input",function(){ phoneEl.value=fmtPhone(phoneEl.valu
 
 $("#cvhAgree").onchange=function(){ $("#cvhSubmit").disabled = !this.checked; };
 
+/* ---------- отправка ---------- */
 $("#cvhSubmit").onclick=function(){
   var btn=this, err=$("#cvhErr"); err.textContent="";
   if(!$("#cvhAgree").checked) return err.textContent="Подтвердите согласие с политикой конфиденциальности";
@@ -303,7 +435,7 @@ $("#cvhSubmit").onclick=function(){
   var comment=$("#cvhComment").value.trim();
   if(name.length<2) return err.textContent="Укажите имя";
   if(phone.replace(/[^\d]/g,"").length<11) return err.textContent="Введите номер телефона полностью";
-  if(!state.slot) return err.textContent="Выберите слот";
+  if(!state.option) return err.textContent="Выберите дату и время";
 
   btn.disabled=true; var orig=btn.innerHTML; btn.innerHTML='<span class="spin"></span>';
 
@@ -311,12 +443,14 @@ $("#cvhSubmit").onclick=function(){
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
-      slotId:state.slot.id, direction:state.direction,
+      package:state.pkgId, slotIds:state.option.ids,
       name:name, phone:phone, telegram:tg, comment:comment
     })
   }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
     .then(function(res){
       if(!res.ok) throw new Error(res.j.error||"Ошибка");
+      booked={ pkg:state.pkg, date:state.date, time:state.option.time };
+      renderDone();
       go(3);
     })
     .catch(function(e){
@@ -324,16 +458,42 @@ $("#cvhSubmit").onclick=function(){
       err.textContent = e.message==="Failed to fetch"
         ? "Не удалось отправить заявку. Попробуйте ещё раз."
         : e.message;
+      if(/заняли/.test(e.message)){ go(1); loadSlots(); }
     });
+};
+
+/* ---------- экран успеха ---------- */
+function renderDone(){
+  var d=parseDate(booked.date);
+  $("#cvhDoneMsg").innerHTML="Вы записаны на <b>"+esc(booked.pkg.title)+"</b><br>"+
+    "<b>"+d.getDate()+" "+MON_FULL[d.getMonth()]+"</b> ("+DOW_FULL[d.getDay()]+") в <b>"+booked.time+" по мск</b>";
+  $("#cvhRoute").href=ROUTE_URL;
+}
+$("#cvhIcs").onclick=function(){
+  var d=booked.date.replace(/-/g,""), t=booked.time.replace(":","");
+  var end=addMin(booked.time, booked.pkg.dur).replace(":","");
+  var ics=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//darialukianova//booking//RU","BEGIN:VEVENT",
+    "UID:"+Date.now()+"@darialukianova",
+    "DTSTART;TZID=Europe/Moscow:"+d+"T"+t+"00",
+    "DTEND;TZID=Europe/Moscow:"+d+"T"+end+"00",
+    "SUMMARY:"+booked.pkg.title+" — Дарья Лукьянова",
+    "LOCATION:"+PLACE_NAME+"\\, Казань",
+    "DESCRIPTION:Запись подтверждается за 48 часов до занятия",
+    "END:VEVENT","END:VCALENDAR"].join("\r\n");
+  var blob=new Blob([ics],{type:"text/calendar;charset=utf-8"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download="zanyatie-daria.ics";
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },400);
 };
 
 $("#cvhBack1").onclick=function(){ go(0); };
 $("#cvhBack2").onclick=function(){ go(1); };
 
-function row(k,v){ return '<div class="r"><span class="k">'+esc(k)+'</span><span class="v">'+esc(v)+'</span></div>'; }
-function parseDate(s){ var p=String(s).split("-"); return new Date(+p[0],(+p[1]-1),+p[2]); }
-function fmtDur(m){ m=Number(m)||50; var h=Math.floor(m/60), mm=m%60; return (h?h+' ч'+(mm?' ':''):'')+(mm?mm+' мин':(h?'':'0 мин')); }
-function cap(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):s; }
-function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+/* ---------- старт: пакет из URL (?pkg=) или выбор ---------- */
+renderPkgList();
+var q=new URLSearchParams(location.search).get("pkg");
+if(q && PACKAGES[q]) selectPkg(q);
+else go(0);
 })();
 </script>
