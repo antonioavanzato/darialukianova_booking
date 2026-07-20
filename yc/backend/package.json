@@ -1,0 +1,9 @@
+{
+  "name": "daria-booking-api",
+  "version": "1.0.0",
+  "description": "API записи Дарьи Лукьяновой — Yandex Cloud Function + YDB",
+  "main": "index.js",
+  "dependencies": {
+    "ydb-sdk": "^5.9.0"
+  }
+}
