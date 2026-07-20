@@ -250,77 +250,84 @@ input,select{font:inherit;}
 
 <div class="toast" id="toast"></div>
 
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+
 <script>
 /* ===================================================================
-   ⬇⬇⬇  ЗАПОЛНИТЬ ПЕРЕД ДЕПЛОЕМ  ⬇⬇⬇
+   Админка на Yandex Cloud: вместо Firebase — свой API (Cloud Function
+   + YDB). Живые обновления заменены поллингом раз в 20 секунд.
+   ⬇ ПОДСТАВИТЬ URL API Gateway после деплоя (yc/deploy.sh) ⬇
    =================================================================== */
-var FIREBASE_CONFIG = {
-  apiKey: "AIzaSyC5ZzSnqXvA5p8b8NYjOPtRjHB2sDTkJmE",
-  authDomain: "daria-booking-baae5.firebaseapp.com",
-  projectId: "daria-booking-baae5",
-  storageBucket: "daria-booking-baae5.firebasestorage.app",
-  messagingSenderId: "486073637927",
-  appId: "1:486073637927:web:c1d87f66a2ec50a3acc202"
-};
-// Ключ Web Push (Firebase → Cloud Messaging → Web configuration → Generate key pair)
-var VAPID_KEY = "BOAWhxye9yCyuNZNqXPYbiWVxynUAtBoN8PwPmSgNw_gmqnJdbLxyVjcsKpu9sZL4zWV8RK83SVNYqX_h3Ke4us";
-/* ===================================================================
-   ⬆⬆⬆  КОНЕЦ НАСТРОЕК  ⬆⬆⬆
-   =================================================================== */
-
-firebase.initializeApp(FIREBASE_CONFIG);
-var auth = firebase.auth();
-var db = firebase.firestore();
-// Локальный кэш (IndexedDB): списки показываются мгновенно из памяти устройства,
-// свежие данные подтягиваются с сервера в фоне. Включаем ДО любого обращения к БД.
-// synchronizeTabs — корректная работа при нескольких открытых вкладках.
-try {
-  db.enablePersistence({ synchronizeTabs: true })
-    .catch(function(e){ console.warn("Локальный кэш Firestore не включился, работаем без него:", e && e.code ? e.code : e); });
-} catch(e){ console.warn("Локальный кэш недоступен:", e); }
-var messaging = null;
-try { messaging = firebase.messaging(); } catch(e){ console.warn("FCM недоступен в этом браузере", e); }
+var API_URL = "https://d5dfvqmsv02vbpei383a.uvah0e6r.apigw.yandexcloud.net";
 
 var DOW=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
 var MON=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
 var $=function(s){return document.querySelector(s);};
-var bookings=[], slots=[], unsubB=null, unsubS=null, current=null, onMsgBound=false;
+var bookings=[], slots=[], current=null, pollT=null;
+var token = localStorage.getItem("adm_token") || null;
 
-/* ---------- регистрация service worker'ов ---------- */
 if("serviceWorker" in navigator){
   navigator.serviceWorker.register("./service-worker.js").catch(function(e){console.warn("SW",e);});
 }
 
+function api(method, path, body){
+  return fetch(API_URL+path, {
+    method: method,
+    headers: Object.assign({"Content-Type":"application/json"},
+      token ? {"Authorization":"Bearer "+token} : {}),
+    body: body ? JSON.stringify(body) : undefined
+  }).then(function(r){
+    if(r.status===401 && path.indexOf("/login")<0){ logout(); throw new Error("Сессия истекла — войдите снова"); }
+    return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||("HTTP "+r.status)); return j; });
+  });
+}
+
 /* ---------- AUTH ---------- */
+/* Email не нужен — вход по одному паролю; поле оставлено скрытым для автозаполнения */
+$("#email").closest(".fld").style.display="none";
 $("#loginBtn").onclick=function(){
-  var btn=this, e=$("#email").value.trim(), p=$("#password").value;
+  var btn=this, p=$("#password").value, l=$("#email").value;
   $("#loginErr").textContent="";
   btn.disabled=true; var o=btn.innerHTML; btn.innerHTML='<span class="spin"></span>';
-  auth.signInWithEmailAndPassword(e,p).catch(function(err){
+  api("POST","/api/login",{login:l,password:p}).then(function(r){
+    token=r.token; localStorage.setItem("adm_token", token);
     btn.disabled=false; btn.innerHTML=o;
-    $("#loginErr").textContent = err.code==="auth/invalid-credential" ? "Неверный email или пароль" : err.message;
+    showApp();
+  }).catch(function(err){
+    btn.disabled=false; btn.innerHTML=o;
+    $("#loginErr").textContent=err.message;
   });
 };
 $("#password").addEventListener("keydown",function(ev){ if(ev.key==="Enter") $("#loginBtn").click(); });
-$("#logoutBtn").onclick=function(){ if(confirm("Выйти из админки?")) auth.signOut(); };
+$("#logoutBtn").onclick=function(){ if(confirm("Выйти из админки?")) logout(); };
+function logout(){
+  token=null; localStorage.removeItem("adm_token");
+  clearInterval(pollT);
+  $("#loginScreen").style.display="flex"; $("#app").style.display="none";
+}
+function showApp(){
+  $("#loginScreen").style.display="none"; $("#app").style.display="block";
+  refresh();
+  clearInterval(pollT); pollT=setInterval(refresh, 20000);
+}
+if(token) showApp();
 
-auth.onAuthStateChanged(function(user){
-  if(user){
-    $("#loginScreen").style.display="none";
-    $("#app").style.display="block";
-    startListeners();
-    setupNotifications();
-  } else {
-    $("#loginScreen").style.display="flex";
-    $("#app").style.display="none";
-    if(unsubB) unsubB(); if(unsubS) unsubS();
-  }
-});
+/* ---------- DATA ---------- */
+function refresh(){
+  return Promise.all([api("GET","/api/admin/bookings"), api("GET","/api/admin/slots")])
+    .then(function(r){
+      bookings=r[0].map(fromApiBooking); slots=r[1].map(fromApiSlot);
+      renderBookings(); renderSlots();
+    }).catch(function(e){ console.warn(e); });
+}
+function fromApiBooking(b){
+  return { id:b.id, slotId:b.slot_id, direction:b.direction, name:b.name, phone:b.phone,
+    telegram:b.telegram, comment:b.comment, status:b.status,
+    slotDate:b.slot_date, slotTime:b.slot_time, createdAt:Number(b.created_at)||null };
+}
+function fromApiSlot(s){
+  return { id:s.id, date:s.date, time:s.time, direction:s.direction,
+    durationMin:Number(s.duration_min)||50, status:s.status };
+}
 
 /* ---------- TABS ---------- */
 document.querySelectorAll(".tab").forEach(function(t){
@@ -332,36 +339,18 @@ document.querySelectorAll(".tab").forEach(function(t){
   };
 });
 
-/* ---------- LIVE DATA ---------- */
-function startListeners(){
-  if(unsubB) unsubB();
-  unsubB = db.collection("bookings").orderBy("createdAt","desc").onSnapshot(function(snap){
-    bookings=[]; snap.forEach(function(d){ var b=d.data(); b.id=d.id; bookings.push(b); });
-    renderBookings();
-  }, function(e){ console.error(e); });
-
-  if(unsubS) unsubS();
-  unsubS = db.collection("slots").onSnapshot(function(snap){
-    slots=[]; snap.forEach(function(d){ var s=d.data(); s.id=d.id; slots.push(s); });
-    slots.sort(function(a,b){ return (a.date+a.time)<(b.date+b.time)?-1:1; });
-    renderSlots();
-  }, function(e){ console.error(e); });
-}
-
+/* ---------- RENDER ---------- */
 function renderBookings(){
   var pend = bookings.filter(function(b){return b.status==="pending";});
   var badge=$("#pendBadge");
   badge.textContent=pend.length; badge.style.display = pend.length ? "flex" : "none";
   $("#logoutBtn").classList.toggle("alert", pend.length>0);
-
   renderStats();
-
   var el=$("#bookingsList");
   if(!bookings.length){ el.innerHTML='<div class="empty"><span class="material-symbols-outlined">inbox</span>Заявок пока нет</div>'; return; }
-  // pending сверху
   var sorted=bookings.slice().sort(function(a,b){
     var rank={pending:0,confirmed:1,cancelled:2};
-    return (rank[a.status]-rank[b.status]);
+    return (rank[a.status]-rank[b.status]) || (b.createdAt||0)-(a.createdAt||0);
   });
   el.innerHTML = sorted.map(function(b){
     return '<div class="bcard '+(b.status==="pending"?"pending":"")+'" onclick="openSheet(\''+b.id+'\')">'+
@@ -384,21 +373,22 @@ function renderStats(){
       '<div><div class="sv">'+piano+'</div><div class="sl">Фортепиано</div></div></div>';
 }
 
+function slotStatusLbl(s){ return s==="booked"?"занят":s==="hold"?"ожидает подтверждения":"свободен"; }
 function renderSlots(){
   var el=$("#slotsList");
   if(!slots.length){ el.innerHTML='<div class="empty"><span class="material-symbols-outlined">event_busy</span>Слотов нет</div>'; return; }
   el.innerHTML = slots.map(function(s){
     var dt=parseDate(s.date);
-    return '<div class="slot-row '+(s.status==="booked"?"booked":"")+'">'+
+    return '<div class="slot-row '+(s.status!=="free"?"booked":"")+'">'+
       '<div><div class="d">'+DOW[dt.getDay()]+', '+dt.getDate()+' '+MON[dt.getMonth()]+' · '+s.time+'</div>'+
-      '<div class="t">'+cap(s.direction)+' · '+fmtDur(s.durationMin)+' · '+(s.status==="booked"?"занят":"свободен")+'</div></div>'+
-      (s.status==="booked"?'':'<button class="slot-del" onclick="delSlot(\''+s.id+'\')"><span class="material-symbols-outlined">delete</span></button>')+
+      '<div class="t">'+cap(s.direction)+' · '+fmtDur(s.durationMin)+' · '+slotStatusLbl(s.status)+'</div></div>'+
+      (s.status==="free"?'<button class="slot-del" onclick="delSlot(\''+s.id+'\')"><span class="material-symbols-outlined">delete</span></button>':'')+
     '</div>';
   }).join("");
 }
 
 /* ---------- ADD / DELETE SLOT ---------- */
-(function(){ // дата — сегодня (и не раньше), время — по умолчанию, чтобы поля не были пустыми
+(function(){
   var d=new Date(), p=function(n){return n<10?"0"+n:n;};
   var today=d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
   $("#sfDate").value=today; $("#sfDate").min=today;
@@ -408,17 +398,16 @@ $("#addSlotBtn").onclick=function(){
   var date=$("#sfDate").value, time=$("#sfTime").value;
   if(!date||!time) return toast("Укажите дату и время");
   var btn=this; btn.disabled=true;
-  db.collection("slots").add({
-    date:date, time:time, direction:$("#sfDir").value,
-    durationMin:Number($("#sfDur").value), status:"free",
-    createdAt:firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function(){ toast("Слот добавлен"); })
+  api("POST","/api/admin/slots",{
+    date:date, time:time, direction:$("#sfDir").value, durationMin:Number($("#sfDur").value)
+  }).then(function(){ toast("Слот добавлен"); return refresh(); })
     .catch(function(e){ toast("Ошибка: "+e.message); })
     .finally(function(){ btn.disabled=false; });
 };
 window.delSlot=function(id){
   if(!confirm("Удалить слот?")) return;
-  db.collection("slots").doc(id).delete().then(function(){toast("Слот удалён");});
+  api("DELETE","/api/admin/slots/"+id).then(function(){ toast("Слот удалён"); return refresh(); })
+    .catch(function(e){ toast("Ошибка: "+e.message); });
 };
 
 /* ---------- CLIENT SHEET ---------- */
@@ -483,83 +472,29 @@ $("#sheetBack").onclick=closeSheet;
     if(startY===null) return;
     var pulled=dy>110;
     startY=null; dy=0;
-    if(pulled){ ind.style.height="44px"; ind.style.opacity="1"; startListeners(); toast("Обновлено");
+    if(pulled){ ind.style.height="44px"; ind.style.opacity="1";
+      refresh().then(function(){ toast("Обновлено"); });
       setTimeout(function(){ ind.style.height="0px"; ind.style.opacity="0"; },700);
     } else { ind.style.height="0px"; ind.style.opacity="0"; }
   });
 })();
 
 window.setStatus=function(id,status){
-  var b=bookings.find(function(x){return x.id===id;}); if(!b) return;
-  var batch=db.batch();
-  batch.update(db.collection("bookings").doc(id),{status:status});
-  // синхронизация слота: подтверждение → booked, отмена → free.
-  // обновляем только если слот реально существует, иначе батч упадёт целиком
-  if(b.slotId && slots.find(function(s){return s.id===b.slotId;})){
-    batch.update(db.collection("slots").doc(b.slotId),{status: status==="confirmed"?"booked":"free"});
-  }
-  batch.commit().then(function(){
+  api("PATCH","/api/admin/bookings/"+id,{status:status}).then(function(){
     toast(status==="confirmed"?"Бронь подтверждена":"Бронь отменена");
-    closeSheet();
+    closeSheet(); return refresh();
   }).catch(function(e){ toast("Ошибка: "+e.message); });
 };
-
 window.delBooking=function(id){
-  var b=bookings.find(function(x){return x.id===id;}); if(!b) return;
   if(!confirm("Удалить запись безвозвратно?")) return;
-  var batch=db.batch();
-  batch.delete(db.collection("bookings").doc(id));
-  // если слот существует и был занят этой бронью — освобождаем
-  if(b.slotId && slots.find(function(s){return s.id===b.slotId;})){
-    batch.update(db.collection("slots").doc(b.slotId),{status:"free"});
-  }
-  batch.commit().then(function(){ toast("Запись удалена"); closeSheet(); })
-    .catch(function(e){ toast("Ошибка: "+e.message); });
+  api("PATCH","/api/admin/bookings/"+id,{delete:true}).then(function(){
+    toast("Запись удалена"); closeSheet(); return refresh();
+  }).catch(function(e){ toast("Ошибка: "+e.message); });
 };
-
-/* ---------- PUSH NOTIFICATIONS ---------- */
-function setupNotifications(){
-  var banner=$("#notifBanner"); banner.innerHTML="";
-  if(!messaging || !("Notification" in window)) return;
-  if(Notification.permission==="granted"){ registerFcmToken(); return; }
-  if(Notification.permission==="denied") return;
-  banner.innerHTML='<div class="notif-banner"><span class="material-symbols-outlined">notifications</span>'+
-    'Включите уведомления о новых заявках'+
-    '<button class="btn primary" id="enableNotif">Включить</button></div>';
-  $("#enableNotif").onclick=function(){
-    Notification.requestPermission().then(function(p){
-      if(p==="granted"){ registerFcmToken(); banner.innerHTML=""; toast("Уведомления включены"); }
-    });
-  };
-}
-function registerFcmToken(){
-  if(!messaging) return;
-  // отдельный scope, чтобы не конфликтовать с кэширующим service-worker.js (scope "./")
-  navigator.serviceWorker.register("./firebase-messaging-sw.js",{scope:"./fcm/"}).then(function(reg){
-    return messaging.getToken({vapidKey:VAPID_KEY, serviceWorkerRegistration:reg});
-  }).then(function(token){
-    if(!token){ toast("Не удалось получить токен уведомлений"); return; }
-    // сохраняем токен устройства, чтобы Apps Script мог слать push
-    return db.collection("config").doc("admin").set({
-      fcmTokens: firebase.firestore.FieldValue.arrayUnion(token)
-    },{merge:true}).then(function(){ toast("Уведомления подключены"); });
-  }).catch(function(e){ console.warn("FCM token", e); toast("Ошибка уведомлений: "+(e&&e.message?e.message:e)); });
-
-  // foreground-сообщения (PWA открыта) — навешиваем только один раз
-  if(!onMsgBound){
-    onMsgBound=true;
-    messaging.onMessage(function(payload){
-      var n=(payload&&payload.notification)||{};
-      toast(n.title||"Новая заявка");
-      try{ new Notification(n.title||"Новая заявка",{body:n.body||"",icon:"./icons/icon-192.png"}); }catch(e){}
-    });
-  }
-}
 
 /* ---------- helpers ---------- */
 function cbtn(href,icon,lbl){
   if(!href) return '<a class="cbtn off"><span class="material-symbols-outlined">'+icon+'</span><span class="lbl">'+lbl+'</span></a>';
-  // без target=_blank: app-схемы (tel/sms/tg/whatsapp) открывают приложение напрямую, без пустой вкладки
   return '<a class="cbtn" href="'+href+'" rel="noopener"><span class="material-symbols-outlined">'+icon+'</span><span class="lbl">'+lbl+'</span></a>';
 }
 function row(k,v){ return '<div class="r"><span class="k">'+k+'</span><span class="v">'+esc(v)+'</span></div>'; }
@@ -569,8 +504,7 @@ function fmtSlot(b){
   return "—";
 }
 function parseDate(s){ var p=String(s).split("-"); return new Date(+p[0],(+p[1]-1),+p[2]); }
-function fmtDate(ts){ if(!ts||!ts.toDate) return "—"; var d=ts.toDate(); return d.getDate()+' '+MON[d.getMonth()]+', '+pad(d.getHours())+':'+pad(d.getMinutes()); }
-function fmtPrice(n){ return Number(n).toLocaleString("ru-RU")+" ₽"; }
+function fmtDate(ms){ if(!ms) return "—"; var d=new Date(ms); return d.getDate()+' '+MON[d.getMonth()]+', '+pad(d.getHours())+':'+pad(d.getMinutes()); }
 function pad(n){ return n<10?"0"+n:n; }
 function cap(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):s; }
 function fmtDur(m){ m=Number(m)||50; var h=Math.floor(m/60), mm=m%60; return (h?h+' ч'+(mm?' ':''):'')+(mm?mm+' мин':(h?'':'0 мин')); }
