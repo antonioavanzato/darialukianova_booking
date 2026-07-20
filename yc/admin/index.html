@@ -208,7 +208,10 @@ input,select{font:inherit;}
 <div class="app" id="app">
   <div class="topbar">
     <div><div class="sub">Записи</div><h1>Дарья</h1></div>
-    <button class="icon-btn" id="logoutBtn" title="Выйти"><span class="material-symbols-outlined">logout</span></button>
+    <div style="display:flex;gap:8px;">
+      <button class="icon-btn" id="pushBtn" title="Push-уведомления" style="display:none;"><span class="material-symbols-outlined">notifications_off</span></button>
+      <button class="icon-btn" id="logoutBtn" title="Выйти"><span class="material-symbols-outlined">logout</span></button>
+    </div>
   </div>
 
   <div id="notifBanner"></div>
@@ -306,8 +309,51 @@ function showApp(){
   $("#loginScreen").style.display="none"; $("#app").style.display="block";
   refresh();
   clearInterval(pollT); pollT=setInterval(refresh, 20000);
+  initPush();
 }
 if(token) showApp();
+
+/* ---------- WEB PUSH ---------- */
+var VAPID_PUBLIC_KEY="BLh-_kxsA05RiOxD2NuOakbtaqdbPVjOSiJonDq1ewUvUJO3TBUCHvJ1pVaVIv9GDgj4egaz_xjULiJqT47CgaM";
+function b64ToU8(s){
+  var pad="=".repeat((4-s.length%4)%4), b=(s+pad).replace(/-/g,"+").replace(/_/g,"/");
+  var raw=atob(b), a=new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++) a[i]=raw.charCodeAt(i);
+  return a;
+}
+function pushSupported(){ return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
+function setPushIcon(on){
+  var btn=$("#pushBtn"); if(!btn) return;
+  btn.style.display=pushSupported()?"flex":"none";
+  btn.querySelector(".material-symbols-outlined").textContent = on?"notifications_active":"notifications_off";
+  btn.classList.toggle("alert", !!on);
+}
+function initPush(){
+  if(!pushSupported()) return;
+  navigator.serviceWorker.ready.then(function(reg){
+    return reg.pushManager.getSubscription();
+  }).then(function(sub){ setPushIcon(!!sub); }).catch(function(){});
+}
+$("#pushBtn").onclick=function(){
+  if(!pushSupported()) return;
+  navigator.serviceWorker.ready.then(function(reg){
+    return reg.pushManager.getSubscription().then(function(sub){
+      if(sub){
+        // отключить
+        return api("DELETE","/api/admin/push",{endpoint:sub.endpoint})
+          .then(function(){ return sub.unsubscribe(); })
+          .then(function(){ setPushIcon(false); });
+      }
+      return Notification.requestPermission().then(function(perm){
+        if(perm!=="granted") throw new Error("Разрешите уведомления в настройках");
+        return reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64ToU8(VAPID_PUBLIC_KEY)});
+      }).then(function(newSub){
+        var j=newSub.toJSON();
+        return api("POST","/api/admin/push",{endpoint:j.endpoint, keys:j.keys});
+      }).then(function(){ setPushIcon(true); });
+    });
+  }).catch(function(e){ alert(e.message||"Не удалось включить уведомления"); });
+};
 
 /* ---------- DATA ---------- */
 function refresh(){
