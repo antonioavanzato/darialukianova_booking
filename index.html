@@ -278,16 +278,16 @@ input,select{font:inherit;}
       <div class="secttl" id="dayTitle"></div>
       <div class="slot-form">
         <div class="row">
-          <input id="sfTime" type="time" value="12:00">
-          <select id="sfDur"><option value="50" selected>50 мин</option><option value="75">1 ч 15 мин</option><option value="100">1 ч 40 мин</option></select>
+          <input id="sfStart" type="time" value="12:00">
+          <input id="sfEnd" type="time" value="15:00">
         </div>
         <div class="row3">
-          <select id="sfKind"><option value="1" selected>Одинарный слот</option><option value="2">Двойной (два подряд)</option></select>
           <select id="sfRepeat"><option value="1" selected>Только эта дата</option><option value="2">Повторять 2 недели</option><option value="4">Повторять 4 недели</option><option value="8">Повторять 8 недель</option></select>
+          <button class="btn primary block" id="addWinBtn"><span class="material-symbols-outlined">add</span>Открыть время</button>
         </div>
-        <button class="btn primary block" id="addSlotBtn" style="margin-top:10px;"><span class="material-symbols-outlined">add</span>Добавить слот</button>
+        <div style="font-size:12px;color:var(--gray);margin-top:8px;">Откройте промежуток (например 13:00–15:00). Клиенты сами выберут внутри него время под своё занятие — 50 мин, 1 ч 15 или 1 ч 40.</div>
       </div>
-      <div id="daySlots"></div>
+      <div id="dayWindows"></div>
       <div class="secttl" id="dayBookTtl" style="display:none;">Записи в этот день</div>
       <div id="dayBookings"></div>
     </div>
@@ -315,7 +315,7 @@ var API_URL = "https://d5dfvqmsv02vbpei383a.uvah0e6r.apigw.yandexcloud.net";
 var DOW=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
 var MON=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
 var $=function(s){return document.querySelector(s);};
-var bookings=[], slots=[], current=null, pollT=null;
+var bookings=[], windows=[], current=null, pollT=null;
 var token = localStorage.getItem("adm_token") || null;
 
 if("serviceWorker" in navigator){
@@ -407,21 +407,50 @@ $("#pushBtn").onclick=function(){
 
 /* ---------- DATA ---------- */
 function refresh(){
-  return Promise.all([api("GET","/api/admin/bookings"), api("GET","/api/admin/slots")])
+  return Promise.all([api("GET","/api/admin/bookings"), api("GET","/api/admin/windows")])
     .then(function(r){
-      bookings=r[0].map(fromApiBooking); slots=r[1].map(fromApiSlot);
+      bookings=r[0].map(fromApiBooking); windows=r[1].map(fromApiWindow);
       renderBookings(); renderCal(); renderDay();
     }).catch(function(e){ console.warn(e); });
 }
 function fromApiBooking(b){
-  return { id:b.id, slotId:b.slot_id, slotId2:b.slot_id2||null, direction:b.direction, name:b.name, phone:b.phone,
+  return { id:b.id, name:b.name, phone:b.phone,
     telegram:b.telegram, comment:b.comment, status:b.status, package:b.package||b.direction||"",
-    price:Number(b.price)||null, durationMin:Number(b.duration_min)||null,
+    price:Number(b.price)||null, durationMin:Number(b.duration_min)||50,
     slotDate:b.slot_date, slotTime:b.slot_time, createdAt:Number(b.created_at)||null };
 }
-function fromApiSlot(s){
-  return { id:s.id, date:s.date, time:s.time, direction:s.direction,
-    durationMin:Number(s.duration_min)||50, status:s.status };
+function fromApiWindow(w){
+  return { id:w.id, date:w.date, start:w.start, end:w.end,
+    startMin:Number(w.start_min), endMin:Number(w.end_min) };
+}
+
+/* интервальная арифметика (минуты от полуночи) */
+function hmMin(hhmm){ var p=String(hhmm).split(":"); return (+p[0])*60+(+p[1]); }
+function mMinToHm(t){ return ("0"+Math.floor(t/60)).slice(-2)+":"+("0"+(t%60)).slice(-2); }
+function mergeIv(list){
+  var s=list.map(function(x){return [x[0],x[1]];}).sort(function(a,b){return a[0]-b[0];}), out=[];
+  s.forEach(function(iv){ var l=out[out.length-1];
+    if(l && iv[0]<=l[1]) l[1]=Math.max(l[1],iv[1]); else out.push([iv[0],iv[1]]); });
+  return out;
+}
+function subtractIv(free, busy){
+  var res=free.map(function(x){return [x[0],x[1]];});
+  busy.forEach(function(b){ var nx=[];
+    res.forEach(function(f){
+      if(b[1]<=f[0]||b[0]>=f[1]){ nx.push(f); return; }
+      if(b[0]>f[0]) nx.push([f[0],b[0]]);
+      if(b[1]<f[1]) nx.push([b[1],f[1]]);
+    }); res=nx;
+  });
+  return res.filter(function(iv){return iv[1]>iv[0];});
+}
+/* свободные интервалы на дату: окна минус активные брони */
+function freeIntervals(date){
+  var wins=windows.filter(function(w){return w.date===date;}).map(function(w){return [w.startMin,w.endMin];});
+  if(!wins.length) return [];
+  var busy=bookings.filter(function(b){return b.slotDate===date && b.status!=="cancelled";})
+    .map(function(b){ var s=hmMin(b.slotTime); return [s, s+(b.durationMin||50)]; });
+  return subtractIv(mergeIv(wins), busy);
 }
 
 /* ---------- TABS ---------- */
@@ -476,11 +505,14 @@ function todayStr(){ var d=new Date(), p=function(n){return n<10?"0"+n:n;};
   return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
 function dayInfo(){
   var info={};
-  slots.forEach(function(s){ (info[s.date]=info[s.date]||{free:0,g:0,o:0}).free += (s.status==="free"?1:0); });
+  windows.forEach(function(w){ (info[w.date]=info[w.date]||{free:0,g:0,o:0}); });
   bookings.forEach(function(b){
     if(!b.slotDate || b.status==="cancelled") return;
     var i=(info[b.slotDate]=info[b.slotDate]||{free:0,g:0,o:0});
     if(b.status==="confirmed") i.g++; else i.o++;
+  });
+  Object.keys(info).forEach(function(date){
+    info[date].free = freeIntervals(date).length ? 1 : 0;
   });
   return info;
 }
@@ -516,48 +548,46 @@ function renderDay(){
   if(!selDate){ panel.style.display="none"; return; }
   panel.style.display="block";
   var dt=parseDate(selDate);
-  $("#dayTitle").textContent=DOW[dt.getDay()]+", "+dt.getDate()+" "+MON[dt.getMonth()];
-  var ds=slots.filter(function(s){return s.date===selDate;});
-  $("#daySlots").innerHTML = ds.length ? ds.map(function(s){
-    return '<div class="slot-row '+(s.status!=="free"?"booked":"")+'">'+
-      '<div><div class="d">'+s.time+"–"+addMin(s.time,s.durationMin)+'</div>'+
-      '<div class="t">'+fmtDur(s.durationMin)+' · '+slotStatusLbl(s.status)+'</div></div>'+
-      (s.status==="free"?'<button class="slot-del" onclick="delSlot(\''+s.id+'\')"><span class="material-symbols-outlined">delete</span></button>':'')+
+  $("#dayTitle").textContent=DOW[dt.getDay()]+", "+dt.getDate()+" "+MON[dt.getMonth()]+" — открытое время";
+  var ws=windows.filter(function(w){return w.date===selDate;}).sort(function(a,b){return a.startMin-b.startMin;});
+  var free=freeIntervals(selDate);
+  $("#dayWindows").innerHTML = ws.length ? ws.map(function(w){
+    return '<div class="slot-row">'+
+      '<div><div class="d">'+w.start+"–"+w.end+'</div>'+
+      '<div class="t">открыто '+fmtDur(w.endMin-w.startMin)+'</div></div>'+
+      '<button class="slot-del" onclick="delWindow(\''+w.id+'\')"><span class="material-symbols-outlined">delete</span></button>'+
     '</div>';
-  }).join("") : '<div class="empty" style="padding:20px;"><span class="material-symbols-outlined">event_busy</span>Слотов на эту дату нет</div>';
-  var db=bookings.filter(function(b){return b.slotDate===selDate && b.status!=="cancelled";});
+  }).join("") + (free.length ? '<div class="t" style="color:var(--gray);font-size:12px;margin:6px 4px 0;">Свободно: '+free.map(function(iv){return mMinToHm(iv[0])+"–"+mMinToHm(iv[1]);}).join(", ")+'</div>' : '<div class="t" style="color:var(--gray);font-size:12px;margin:6px 4px 0;">Всё время занято бронями</div>')
+    : '<div class="empty" style="padding:20px;"><span class="material-symbols-outlined">event_busy</span>Время на эту дату не открыто</div>';
+  var db=bookings.filter(function(b){return b.slotDate===selDate && b.status!=="cancelled";})
+    .sort(function(a,b){return hmMin(a.slotTime)-hmMin(b.slotTime);});
   $("#dayBookTtl").style.display = db.length ? "block" : "none";
   $("#dayBookings").innerHTML = db.map(function(b){
     return '<div class="bcard '+(b.status==="pending"?"pending":"")+'" onclick="openSheet(\''+b.id+'\')">'+
       '<div class="top"><div><div class="nm">'+esc(b.name)+'</div>'+
       '<div class="meta">'+esc(b.package||"")+(b.price?' · '+b.price+' ₽':'')+'</div></div>'+
       '<span class="pill '+b.status+'">'+statusLbl(b.status)+'</span></div>'+
-      '<div class="when"><span class="material-symbols-outlined">schedule</span>'+(b.slotTime||"")+'</div>'+
+      '<div class="when"><span class="material-symbols-outlined">schedule</span>'+bookingRange(b)+'</div>'+
     '</div>';
   }).join("");
 }
-function addMin(t,m){ var q=String(t).split(":"), x=(+q[0])*60+(+q[1])+(Number(m)||0);
-  return ("0"+Math.floor(x/60)).slice(-2)+":"+("0"+(x%60)).slice(-2); }
+function bookingRange(b){ var s=hmMin(b.slotTime); return mMinToHm(s)+"–"+mMinToHm(s+(b.durationMin||50)); }
 
-/* ---------- ADD / DELETE SLOT ---------- */
-$("#addSlotBtn").onclick=function(){
-  var time=$("#sfTime").value;
+/* ---------- ADD / DELETE WINDOW ---------- */
+$("#addWinBtn").onclick=function(){
+  var start=$("#sfStart").value, end=$("#sfEnd").value;
   if(!selDate) return toast("Выберите дату в календаре");
-  if(!time) return toast("Укажите время");
-  var dur=Number($("#sfDur").value), weeks=Number($("#sfRepeat").value);
-  var kind=Number($("#sfKind").value);
+  if(!start||!end) return toast("Укажите время начала и конца");
+  if(hmMin(end)<=hmMin(start)) return toast("Конец должен быть позже начала");
   var btn=this; btn.disabled=true;
-  var req=api("POST","/api/admin/slots",{ date:selDate, time:time, durationMin:dur, repeatWeeks:weeks });
-  if(kind===2) req=req.then(function(){
-    return api("POST","/api/admin/slots",{ date:selDate, time:addMin(time,dur), durationMin:dur, repeatWeeks:weeks });
-  });
-  req.then(function(){ toast(kind===2?"Двойной слот добавлен":"Слот добавлен"); return refresh(); })
+  api("POST","/api/admin/windows",{ date:selDate, start:start, end:end, repeatWeeks:Number($("#sfRepeat").value) })
+    .then(function(){ toast("Время открыто"); return refresh(); })
     .catch(function(e){ toast("Ошибка: "+e.message); })
     .finally(function(){ btn.disabled=false; });
 };
-window.delSlot=function(id){
-  if(!confirm("Удалить слот?")) return;
-  api("DELETE","/api/admin/slots/"+id).then(function(){ toast("Слот удалён"); return refresh(); })
+window.delWindow=function(id){
+  if(!confirm("Убрать этот промежуток?")) return;
+  api("DELETE","/api/admin/windows/"+id).then(function(){ toast("Промежуток убран"); return refresh(); })
     .catch(function(e){ toast("Ошибка: "+e.message); });
 };
 
@@ -652,7 +682,9 @@ function cbtn(href,icon,lbl){
 function row(k,v){ return '<div class="r"><span class="k">'+k+'</span><span class="v">'+esc(v)+'</span></div>'; }
 function statusLbl(s){ return s==="pending"?"Новая":s==="confirmed"?"Подтверждена":"Отменена"; }
 function fmtSlot(b){
-  if(b.slotDate){ var d=parseDate(b.slotDate); return DOW[d.getDay()]+', '+d.getDate()+' '+MON[d.getMonth()]+' · '+(b.slotTime||''); }
+  if(b.slotDate){ var d=parseDate(b.slotDate);
+    var s=hmMin(b.slotTime||"0:0"), rng=b.slotTime?(mMinToHm(s)+"–"+mMinToHm(s+(b.durationMin||50))):"";
+    return DOW[d.getDay()]+', '+d.getDate()+' '+MON[d.getMonth()]+' · '+rng; }
   return "—";
 }
 function parseDate(s){ var p=String(s).split("-"); return new Date(+p[0],(+p[1]-1),+p[2]); }

@@ -11,6 +11,17 @@ CREATE TABLE slots (
     PRIMARY KEY (id)
 );
 
+-- Окна доступности Даши (интервалы времени, которые она открывает).
+-- Клиентские занятия нарезаются внутри свободных участков этих окон.
+CREATE TABLE windows (
+    id Utf8 NOT NULL,
+    date Utf8,             -- YYYY-MM-DD
+    start_min Uint32,      -- минуты от полуночи
+    end_min Uint32,
+    created_at Uint64,     -- ms epoch
+    PRIMARY KEY (id)
+);
+
 CREATE TABLE push_subscriptions (
     id Utf8 NOT NULL,      -- sha256(endpoint)
     endpoint Utf8,
