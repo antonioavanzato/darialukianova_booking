@@ -237,7 +237,6 @@
 (function(){
 var API_URL = "https://d5dfvqmsv02vbpei383a.uvah0e6r.apigw.yandexcloud.net";
 var TG_USERNAME = "luchok_dashkenazy";           // Telegram Даши для «Связаться со мной»
-var STEP = 30;                                    // шаг вариантов начала занятия, мин
 
 /* Пакеты — в точности как в прайсе. id совпадают с бэкендом. */
 var PACKAGES = {
@@ -344,14 +343,13 @@ function loadAvailability(){
       $("#cvhGrid").innerHTML='<div class="hint" style="grid-column:1/-1;"><span class="material-symbols-outlined">error</span>Не удалось загрузить расписание</div>';
     });
 }
-/* варианты начала занятия на дату: внутри каждого свободного интервала
-   шагаем по STEP от начала, пока занятие целиком помещается */
+/* варианты времени на дату: внутри каждого свободного интервала нарезаем
+   занятия ПОДРЯД, без наложений (12:00–12:50, 12:50–13:40 …) — понятно
+   клиенту и время не простаивает */
 function startOptions(date){
-  var free=freeByDate[date]||[], D=state.pkg.dur, out=[], seen={};
+  var free=freeByDate[date]||[], D=state.pkg.dur, out=[];
   free.forEach(function(iv){
-    for(var t=iv[0]; t+D<=iv[1]; t+=STEP){
-      if(!seen[t]){ seen[t]=1; out.push(t); }
-    }
+    for(var t=iv[0]; t+D<=iv[1]; t+=D){ out.push(t); }
   });
   out.sort(function(a,b){return a-b;});
   return out;
