@@ -1,6 +1,6 @@
 /* Service Worker админки — офлайн-кэш оболочки.
    ВАЖНО: лежит в КОРНЕ сайта (рядом с index.html), иначе PWA/scope не работают. */
-const CACHE = "daria-admin-v11";
+const CACHE = "daria-admin-v12";
 const ASSETS = [
   "./",
   "./index.html",

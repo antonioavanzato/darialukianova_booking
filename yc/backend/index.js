@@ -15,13 +15,13 @@
  *
  * Роуты (через API Gateway, префикс /api):
  *   POST /api/login                      {password} → {token}
- *   GET  /api/slots?direction=вокал      публично: свободные будущие слоты
- *   POST /api/bookings                   публично: создать заявку (слот → hold)
+ *   GET  /api/availability               публично: свободные интервалы по датам
+ *   POST /api/bookings                   публично: {package,date,start} создать заявку
  *   GET  /api/admin/bookings             админ: все заявки
  *   PATCH /api/admin/bookings/{id}       админ: {status} | {delete:true}
- *   GET  /api/admin/slots                админ: все слоты
- *   POST /api/admin/slots                админ: создать слот(ы)
- *   DELETE /api/admin/slots/{id}         админ: удалить слот
+ *   GET  /api/admin/windows              админ: окна доступности
+ *   POST /api/admin/windows              админ: открыть интервал {date,start,end,repeatWeeks?}
+ *   DELETE /api/admin/windows/{id}       админ: убрать интервал
  * =====================================================================
  */
 'use strict';
@@ -60,6 +60,58 @@ function addMin(hhmm, min) {
   const [h, m] = hhmm.split(':').map(Number);
   const t = h * 60 + m + min;
   return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+}
+function hmToMin(hhmm) { const [h, m] = String(hhmm).split(':').map(Number); return h * 60 + m; }
+function minToHm(t) { return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); }
+
+// Слить пересекающиеся и смежные интервалы ([s,e], минуты от полуночи).
+// `<=` — чтобы смежные окна 13:00–15:00 и 15:00–17:00 стали одним 13:00–17:00
+// (занятие может «перетечь» в соседний свободный интервал).
+function mergeIntervals(list) {
+  const s = list.map((x) => [x[0], x[1]]).sort((a, b) => a[0] - b[0]);
+  const out = [];
+  for (const iv of s) {
+    const last = out[out.length - 1];
+    if (last && iv[0] <= last[1]) last[1] = Math.max(last[1], iv[1]);
+    else out.push([iv[0], iv[1]]);
+  }
+  return out;
+}
+// Вычесть занятые интервалы из свободных.
+function subtractBusy(free, busy) {
+  let res = free.map((x) => [x[0], x[1]]);
+  for (const b of busy) {
+    const next = [];
+    for (const f of res) {
+      if (b[1] <= f[0] || b[0] >= f[1]) { next.push(f); continue; }
+      if (b[0] > f[0]) next.push([f[0], b[0]]);
+      if (b[1] < f[1]) next.push([b[1], f[1]]);
+    }
+    res = next;
+  }
+  return res.filter((iv) => iv[1] > iv[0]);
+}
+
+// Карта дата → свободные интервалы (окна Даши минус активные брони) начиная с fromDate.
+async function computeAvailability(fromDate) {
+  const wins = (await query(
+    'DECLARE $min AS Utf8; SELECT date, start_min, end_min FROM windows WHERE date >= $min;',
+    { $min: TypedValues.utf8(fromDate) }))[0] || [];
+  const bks = (await query(
+    'DECLARE $min AS Utf8; SELECT slot_date, slot_time, duration_min, status FROM bookings WHERE slot_date >= $min;',
+    { $min: TypedValues.utf8(fromDate) }))[0] || [];
+  const winByDate = {}, busyByDate = {};
+  for (const w of wins) (winByDate[w.date] = winByDate[w.date] || []).push([Number(w.start_min), Number(w.end_min)]);
+  for (const b of bks) {
+    if (b.status === 'cancelled') continue;
+    const s = hmToMin(b.slot_time);
+    (busyByDate[b.slot_date] = busyByDate[b.slot_date] || []).push([s, s + (Number(b.duration_min) || 50)]);
+  }
+  const out = {};
+  for (const date of Object.keys(winByDate)) {
+    out[date] = subtractBusy(mergeIntervals(winByDate[date]), busyByDate[date] || []);
+  }
+  return out;
 }
 
 let driver = null;
@@ -202,16 +254,13 @@ async function sendWebPush(b) {
 }
 
 /* ---------- handlers ---------- */
-async function publicSlots() {
-  // все свободные слоты не раньше чем через 2 дня (по Москве)
-  const rows = await query(
-    'DECLARE $min AS Utf8;\n' +
-    'SELECT id, date, time, duration_min FROM slots\n' +
-    'WHERE status = "free" AND date >= $min\n' +
-    'ORDER BY date, time;',
-    { $min: TypedValues.utf8(minBookingDate()) }
-  );
-  return { code: 200, body: rows[0] };
+// Публично: свободные интервалы доступности по датам (>= минимум за 2 дня).
+async function publicAvailability() {
+  const av = await computeAvailability(minBookingDate());
+  const out = Object.keys(av).sort()
+    .map((date) => ({ date, free: av[date].map((iv) => [iv[0], iv[1]]) }))
+    .filter((d) => d.free.length);
+  return { code: 200, body: out };
 }
 
 async function createBooking(data) {
@@ -222,57 +271,40 @@ async function createBooking(data) {
   if (String(data.comment || '').length > 2000) return { code: 400, body: { error: 'Слишком длинный комментарий' } };
   const pkg = PACKAGES[String(data.package || '')];
   if (!pkg) return { code: 400, body: { error: 'Неверный пакет' } };
-  const slotIds = Array.isArray(data.slotIds) ? data.slotIds.map(String).slice(0, 2)
-    : data.slotId ? [String(data.slotId)] : [];
-  if (!slotIds.length) return { code: 400, body: { error: 'Выберите время' } };
+  const date = String(data.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { code: 400, body: { error: 'Неверная дата' } };
+  if (date < minBookingDate()) return { code: 400, body: { error: 'Запись возможна не позднее чем за 2 дня' } };
+  const start = String(data.start || '');
+  if (!/^\d{2}:\d{2}$/.test(start)) return { code: 400, body: { error: 'Выберите время' } };
+  const startMin = hmToMin(start), endMin = startMin + pkg.dur;
 
-  // слоты должны существовать, быть свободными, на одной дате и (для пары) идти подряд
-  const slots = [];
-  for (const sid of slotIds) {
-    const s = (await query(
-      'DECLARE $id AS Utf8; SELECT id, date, time, duration_min, status FROM slots WHERE id = $id;',
-      { $id: TypedValues.utf8(sid) }))[0][0];
-    if (!s) return { code: 400, body: { error: 'Слот не найден' } };
-    if (s.status !== 'free') return { code: 409, body: { error: 'Это время уже заняли — выберите другое' } };
-    slots.push(s);
-  }
-  slots.sort((a, b) => (a.time < b.time ? -1 : 1));
-  if (slots[0].date < minBookingDate())
-    return { code: 400, body: { error: 'Запись возможна не позднее чем за 2 дня' } };
-  if (slots.length === 2) {
-    if (slots[0].date !== slots[1].date) return { code: 400, body: { error: 'Слоты должны быть в один день' } };
-    if (addMin(slots[0].time, Number(slots[0].duration_min) || 50) !== slots[1].time)
-      return { code: 400, body: { error: 'Слоты должны идти подряд' } };
-  }
-  const totalDur = slots.reduce((a, s) => a + (Number(s.duration_min) || 50), 0);
-  if (totalDur < pkg.dur) return { code: 400, body: { error: 'Выбранного времени не хватает для этого занятия' } };
+  // занятие целиком должно попадать в свободный интервал этой даты
+  const av = await computeAvailability(minBookingDate());
+  const free = av[date] || [];
+  const fits = free.some((iv) => iv[0] <= startMin && endMin <= iv[1]);
+  if (!fits) return { code: 409, body: { error: 'Это время уже недоступно — выберите другое' } };
 
   const id = crypto.randomUUID();
   await query(
-    'DECLARE $id AS Utf8; DECLARE $slot_id AS Utf8; DECLARE $slot_id2 AS Utf8;\n' +
-    'DECLARE $direction AS Utf8; DECLARE $package AS Utf8; DECLARE $price AS Uint32;\n' +
-    'DECLARE $dur AS Uint32;\n' +
+    'DECLARE $id AS Utf8; DECLARE $package AS Utf8; DECLARE $price AS Uint32; DECLARE $dur AS Uint32;\n' +
     'DECLARE $name AS Utf8; DECLARE $phone AS Utf8; DECLARE $telegram AS Utf8;\n' +
     'DECLARE $comment AS Utf8; DECLARE $slot_date AS Utf8; DECLARE $slot_time AS Utf8;\n' +
     'DECLARE $created AS Uint64;\n' +
-    'UPDATE slots SET status = "hold" WHERE id IN ($slot_id, $slot_id2) AND status = "free";\n' +
-    'UPSERT INTO bookings (id, slot_id, slot_id2, direction, package, price, duration_min, name, phone, telegram, comment, status, slot_date, slot_time, created_at)\n' +
-    'VALUES ($id, $slot_id, $slot_id2, $direction, $package, $price, $dur, $name, $phone, $telegram, $comment, "pending", $slot_date, $slot_time, $created);',
+    'UPSERT INTO bookings (id, package, price, duration_min, name, phone, telegram, comment, status, slot_date, slot_time, created_at)\n' +
+    'VALUES ($id, $package, $price, $dur, $name, $phone, $telegram, $comment, "pending", $slot_date, $slot_time, $created);',
     {
-      $id: TypedValues.utf8(id), $slot_id: TypedValues.utf8(slots[0].id),
-      $slot_id2: TypedValues.utf8(slots[1] ? slots[1].id : ''),
-      $direction: TypedValues.utf8(String(data.direction || '')),
+      $id: TypedValues.utf8(id),
       $package: TypedValues.utf8(pkg.title), $price: TypedValues.uint32(pkg.price),
       $dur: TypedValues.uint32(pkg.dur),
       $name: TypedValues.utf8(name), $phone: TypedValues.utf8(phone),
       $telegram: TypedValues.utf8(String(data.telegram || '')),
       $comment: TypedValues.utf8(String(data.comment || '')),
-      $slot_date: TypedValues.utf8(slots[0].date), $slot_time: TypedValues.utf8(slots[0].time),
+      $slot_date: TypedValues.utf8(date), $slot_time: TypedValues.utf8(start),
       $created: TypedValues.uint64(Date.now()),
     }
   );
   const notice = { name, phone, telegram: data.telegram, comment: data.comment,
-    direction: pkg.title, slot_date: slots[0].date, slot_time: slots[0].time, price: pkg.price };
+    direction: pkg.title, slot_date: date, slot_time: start + '–' + minToHm(endMin), price: pkg.price };
   await sendTelegram(notice);
   try { await sendWebPush(notice); } catch (e) { console.warn('push', e); }
   return { code: 200, body: { ok: true, id } };
@@ -284,59 +316,55 @@ async function adminBookings() {
 }
 
 async function patchBooking(id, data) {
-  const b = (await query('DECLARE $id AS Utf8; SELECT id, slot_id, slot_id2 FROM bookings WHERE id = $id;',
+  const b = (await query('DECLARE $id AS Utf8; SELECT id FROM bookings WHERE id = $id;',
     { $id: TypedValues.utf8(id) }))[0][0];
   if (!b) return { code: 404, body: { error: 'Заявка не найдена' } };
 
   if (data.delete) {
-    await query(
-      'DECLARE $id AS Utf8; DECLARE $slot AS Utf8; DECLARE $slot2 AS Utf8;\n' +
-      'DELETE FROM bookings WHERE id = $id;\n' +
-      'UPDATE slots SET status = "free" WHERE id IN ($slot, $slot2) AND status != "free";',
-      { $id: TypedValues.utf8(id), $slot: TypedValues.utf8(b.slot_id || ''), $slot2: TypedValues.utf8(b.slot_id2 || '') });
+    await query('DECLARE $id AS Utf8; DELETE FROM bookings WHERE id = $id;', { $id: TypedValues.utf8(id) });
     return { code: 200, body: { ok: true } };
   }
   const status = data.status;
   if (!['pending', 'confirmed', 'cancelled'].includes(status)) return { code: 400, body: { error: 'Неверный статус' } };
-  const slotStatus = status === 'confirmed' ? 'booked' : status === 'cancelled' ? 'free' : 'hold';
-  await query(
-    'DECLARE $id AS Utf8; DECLARE $st AS Utf8; DECLARE $slot AS Utf8; DECLARE $slot2 AS Utf8; DECLARE $sst AS Utf8;\n' +
-    'UPDATE bookings SET status = $st WHERE id = $id;\n' +
-    'UPDATE slots SET status = $sst WHERE id IN ($slot, $slot2);',
-    { $id: TypedValues.utf8(id), $st: TypedValues.utf8(status),
-      $slot: TypedValues.utf8(b.slot_id || ''), $slot2: TypedValues.utf8(b.slot_id2 || ''), $sst: TypedValues.utf8(slotStatus) });
+  // Доступность считается динамически: отменённая бронь освобождает время автоматически.
+  await query('DECLARE $id AS Utf8; DECLARE $st AS Utf8; UPDATE bookings SET status = $st WHERE id = $id;',
+    { $id: TypedValues.utf8(id), $st: TypedValues.utf8(status) });
   return { code: 200, body: { ok: true } };
 }
 
-async function adminSlots() {
-  const rows = await query('SELECT * FROM slots ORDER BY date, time;');
-  return { code: 200, body: rows[0] };
+// Окна доступности Даши (интервалы). Возвращаем HH:MM для удобства UI.
+async function adminWindows() {
+  const rows = (await query('SELECT id, date, start_min, end_min FROM windows;'))[0] || [];
+  const out = rows.map((w) => ({
+    id: w.id, date: w.date,
+    start: minToHm(Number(w.start_min)), end: minToHm(Number(w.end_min)),
+    start_min: Number(w.start_min), end_min: Number(w.end_min),
+  })).sort((a, b) => (a.date === b.date ? a.start_min - b.start_min : a.date < b.date ? -1 : 1));
+  return { code: 200, body: out };
 }
 
-async function createSlots(data) {
-  // {date, time, direction, durationMin, repeatWeeks?} — repeatWeeks создаёт
-  // серию еженедельных слотов (удобство для регулярного расписания)
+async function createWindows(data) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data.date || ''))) return { code: 400, body: { error: 'Неверная дата' } };
-  if (!/^\d{2}:\d{2}$/.test(String(data.time || ''))) return { code: 400, body: { error: 'Неверное время' } };
+  if (!/^\d{2}:\d{2}$/.test(String(data.start || '')) || !/^\d{2}:\d{2}$/.test(String(data.end || '')))
+    return { code: 400, body: { error: 'Укажите время начала и конца' } };
+  const startMin = hmToMin(data.start), endMin = hmToMin(data.end);
+  if (endMin <= startMin) return { code: 400, body: { error: 'Конец должен быть позже начала' } };
   const weeks = Math.min(Math.max(Number(data.repeatWeeks) || 1, 1), 12);
-  const base = new Date(data.date + 'T00:00:00');
+  const base = new Date(data.date + 'T00:00:00Z');
   for (let w = 0; w < weeks; w++) {
-    const d = new Date(base); d.setDate(d.getDate() + w * 7);
+    const d = new Date(base); d.setUTCDate(d.getUTCDate() + w * 7);
     const ds = d.toISOString().slice(0, 10);
     await query(
-      'DECLARE $id AS Utf8; DECLARE $date AS Utf8; DECLARE $time AS Utf8;\n' +
-      'DECLARE $dir AS Utf8; DECLARE $dur AS Uint32; DECLARE $created AS Uint64;\n' +
-      'UPSERT INTO slots (id, date, time, direction, duration_min, status, created_at)\n' +
-      'VALUES ($id, $date, $time, $dir, $dur, "free", $created);',
+      'DECLARE $id AS Utf8; DECLARE $date AS Utf8; DECLARE $s AS Uint32; DECLARE $e AS Uint32; DECLARE $created AS Uint64;\n' +
+      'UPSERT INTO windows (id, date, start_min, end_min, created_at) VALUES ($id, $date, $s, $e, $created);',
       { $id: TypedValues.utf8(crypto.randomUUID()), $date: TypedValues.utf8(ds),
-        $time: TypedValues.utf8(data.time), $dir: TypedValues.utf8(String(data.direction || '')),
-        $dur: TypedValues.uint32(Number(data.durationMin) || 50), $created: TypedValues.uint64(Date.now()) });
+        $s: TypedValues.uint32(startMin), $e: TypedValues.uint32(endMin), $created: TypedValues.uint64(Date.now()) });
   }
   return { code: 200, body: { ok: true, created: weeks } };
 }
 
-async function deleteSlot(id) {
-  await query('DECLARE $id AS Utf8; DELETE FROM slots WHERE id = $id;', { $id: TypedValues.utf8(id) });
+async function deleteWindow(id) {
+  await query('DECLARE $id AS Utf8; DELETE FROM windows WHERE id = $id;', { $id: TypedValues.utf8(id) });
   return { code: 200, body: { ok: true } };
 }
 
@@ -378,8 +406,8 @@ module.exports.handler = async function (event) {
         return respond({ code: 401, body: { error: 'Неверный логин или пароль' } });
       return respond({ code: 200, body: { token: signToken() } });
     }
-    if (method === 'GET' && path.endsWith('/slots') && !path.includes('/admin/'))
-      return respond(await publicSlots(qs));
+    if (method === 'GET' && path.endsWith('/availability') && !path.includes('/admin/'))
+      return respond(await publicAvailability());
     if (method === 'POST' && path.endsWith('/bookings') && !path.includes('/admin/'))
       return respond(await createBooking(data));
 
@@ -392,14 +420,14 @@ module.exports.handler = async function (event) {
       if (method === 'DELETE') return respond(await deletePushSubscription(data));
     }
 
-    const m = path.match(/\/admin\/(bookings|slots)(?:\/([^/]+))?$/);
+    const m = path.match(/\/admin\/(bookings|windows)(?:\/([^/]+))?$/);
     if (!m) return respond({ code: 404, body: { error: 'Не найдено' } });
     const [, coll, id] = m;
     if (coll === 'bookings' && method === 'GET') return respond(await adminBookings());
     if (coll === 'bookings' && method === 'PATCH' && id) return respond(await patchBooking(id, data));
-    if (coll === 'slots' && method === 'GET') return respond(await adminSlots());
-    if (coll === 'slots' && method === 'POST') return respond(await createSlots(data));
-    if (coll === 'slots' && method === 'DELETE' && id) return respond(await deleteSlot(id));
+    if (coll === 'windows' && method === 'GET') return respond(await adminWindows());
+    if (coll === 'windows' && method === 'POST') return respond(await createWindows(data));
+    if (coll === 'windows' && method === 'DELETE' && id) return respond(await deleteWindow(id));
     return respond({ code: 404, body: { error: 'Не найдено' } });
   } catch (e) {
     console.error(e);
