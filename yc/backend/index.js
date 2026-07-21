@@ -276,7 +276,10 @@ async function createBooking(data) {
   if (date < minBookingDate()) return { code: 400, body: { error: 'Запись возможна не позднее чем за 2 дня' } };
   const start = String(data.start || '');
   if (!/^\d{2}:\d{2}$/.test(start)) return { code: 400, body: { error: 'Выберите время' } };
-  const startMin = hmToMin(start), endMin = startMin + pkg.dur;
+  const startMin = hmToMin(start);
+  // слот резервируется ровными часами (12–13, 13–14) даже если занятие 50 мин
+  const slot = Math.ceil(pkg.dur / 60) * 60;
+  const endMin = startMin + slot;
 
   // занятие целиком должно попадать в свободный интервал этой даты
   const av = await computeAvailability(minBookingDate());
@@ -295,7 +298,7 @@ async function createBooking(data) {
     {
       $id: TypedValues.utf8(id),
       $package: TypedValues.utf8(pkg.title), $price: TypedValues.uint32(pkg.price),
-      $dur: TypedValues.uint32(pkg.dur),
+      $dur: TypedValues.uint32(slot),
       $name: TypedValues.utf8(name), $phone: TypedValues.utf8(phone),
       $telegram: TypedValues.utf8(String(data.telegram || '')),
       $comment: TypedValues.utf8(String(data.comment || '')),

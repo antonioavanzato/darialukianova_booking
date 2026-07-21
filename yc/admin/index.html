@@ -557,7 +557,11 @@ function renderDay(){
       '<div class="t">открыто '+fmtDur(w.endMin-w.startMin)+'</div></div>'+
       '<button class="slot-del" onclick="delWindow(\''+w.id+'\')"><span class="material-symbols-outlined">delete</span></button>'+
     '</div>';
-  }).join("") + (free.length ? '<div class="t" style="color:var(--gray);font-size:12px;margin:6px 4px 0;">Свободно: '+free.map(function(iv){return mMinToHm(iv[0])+"–"+mMinToHm(iv[1]);}).join(", ")+'</div>' : '<div class="t" style="color:var(--gray);font-size:12px;margin:6px 4px 0;">Всё время занято бронями</div>')
+  }).join("") + (function(){
+      var hs=[]; free.forEach(function(iv){ for(var t=iv[0]; t+60<=iv[1]; t+=60) hs.push(mMinToHm(t)+"–"+mMinToHm(t+60)); });
+      return hs.length ? '<div class="t" style="color:var(--gray);font-size:12px;margin:6px 4px 0;">Свободные часы: '+hs.join(", ")+'</div>'
+                       : '<div class="t" style="color:var(--gray);font-size:12px;margin:6px 4px 0;">Свободных ровных часов нет</div>';
+    })()
     : '<div class="empty" style="padding:20px;"><span class="material-symbols-outlined">event_busy</span>Время на эту дату не открыто</div>';
   var db=bookings.filter(function(b){return b.slotDate===selDate && b.status!=="cancelled";})
     .sort(function(a,b){return hmMin(a.slotTime)-hmMin(b.slotTime);});
