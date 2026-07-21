@@ -391,9 +391,7 @@ function selectPkg(id){
   state.pkgId=id; state.pkg=PACKAGES[id]; state.date=null; state.option=null;
   $("#cvhPkgChip").innerHTML='<div class="pkg-chip"><span class="ic"><span class="material-symbols-outlined">music_note</span></span>'+
     '<div><div class="t">'+esc(state.pkg.title)+'</div><div class="s">'+fmtDur(state.pkg.dur)+'</div></div>'+
-    '<div class="p">'+fmtPrice(state.pkg.price)+'&nbsp;₽</div>'+
-    '<button class="chg" id="cvhChg" title="Выбрать другое"><span class="material-symbols-outlined">edit</span></button></div>';
-  $("#cvhChg").onclick=function(){ go(0); };
+    '<div class="p">'+fmtPrice(state.pkg.price)+'&nbsp;₽</div></div>';
   loadAvailability();
   go(1);
 }
