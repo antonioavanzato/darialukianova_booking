@@ -181,12 +181,22 @@ async function sendTelegram(b) {
     '\n🎼 ' + esc(b.direction) + (b.price ? ' · ' + b.price + ' ₽' : '') +
     '\n📅 ' + esc(b.slot_date) + ' в ' + esc(b.slot_time) +
     (b.comment ? '\n\n💬 ' + esc(b.comment) : '');
-  try {
-    await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
-    });
-  } catch (e) { console.warn('telegram', e); }
+  // Поддержка нескольких получателей: TELEGRAM_CHAT_ID через запятую (Даша + Антон).
+  // ФИКС: у каждого fetch жёсткий таймаут — подвисшее соединение с Telegram не держит
+  // функцию до её лимита (15с) и не роняет ответ форме.
+  const chats = String(chatId).split(',').map((s) => s.trim()).filter(Boolean);
+  for (const chat of chats) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+      await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chat, text, parse_mode: 'HTML' }),
+        signal: controller.signal,
+      });
+    } catch (e) { console.warn('telegram', chat, e && e.name === 'AbortError' ? 'timeout' : e); }
+    finally { clearTimeout(timer); }
+  }
 }
 
 /* ---------- web push (iOS PWA / браузеры) ---------- */
@@ -241,9 +251,11 @@ async function sendWebPush(b) {
     title: '🎵 Новая заявка',
     body: b.name + ' · ' + b.direction + '\n' + b.slot_date + ' в ' + b.slot_time,
   });
+  // ФИКС: каждый пуш ограничен таймаутом, иначе один «висящий» адрес блокировал бы ответ.
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
   await Promise.all(rows.map(async (r) => {
     try {
-      await wp.sendNotification({ endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } }, payload, { TTL: 3600 });
+      await withTimeout(wp.sendNotification({ endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } }, payload, { TTL: 3600 }), 6000);
     } catch (e) {
       if (e && (e.statusCode === 404 || e.statusCode === 410))
         await query('DECLARE $id AS Utf8; DELETE FROM push_subscriptions WHERE id = $id;',
@@ -370,6 +382,12 @@ async function deleteWindow(id) {
 
 /* ---------- router ---------- */
 module.exports.handler = async function (event) {
+  // Keep-warm: таймер-триггер (event.messages, без httpMethod) держит инстанс и
+  // соединение с YDB тёплыми, чтобы первая заявка после простоя не шла на холодный старт.
+  if (event && event.messages && !event.httpMethod) {
+    try { await query('SELECT 1;'); } catch (e) { /* прогрев не критичен */ }
+    return { statusCode: 200, body: 'warm' };
+  }
   const method = (event.httpMethod || 'GET').toUpperCase();
   const rawPath = (event.url && !event.url.includes('{')) ? event.url
     : (event.path && !event.path.includes('{')) ? event.path
