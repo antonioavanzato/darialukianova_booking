@@ -220,7 +220,12 @@ function extractComments(data) {
 }
 
 async function handleWebhook(data) {
+  // ДИАГНОСТИКА: пишем всё, что пришло от Meta, — иначе при молчании бота
+  // непонятно, дошло ли событие вообще и что в нём было.
+  console.log('IG-DEBUG вебхук получен:', JSON.stringify(data).slice(0, 2000));
   const comments = extractComments(data);
+  console.log('IG-DEBUG комментариев в событии:', comments.length,
+    comments.map((c) => c.userId + ': ' + c.text).join(' | ').slice(0, 500));
   if (!comments.length) return { code: 200, body: { ok: true, handled: 0 } };
 
   const tokenRow = await loadToken();
@@ -229,13 +234,22 @@ async function handleWebhook(data) {
     return { code: 200, body: { ok: true, handled: 0, warning: 'Токен Instagram не задан' } };
   }
   const triggers = await activeTriggers();
+  console.log('IG-DEBUG токен есть, ig_user_id:', tokenRow.ig_user_id,
+    '· активных слов:', triggers.length, triggers.map((t) => t.keyword).join(','));
   let handled = 0;
 
   for (const c of comments) {
     // свои же комментарии игнорируем, иначе бот ответит сам себе
-    if (tokenRow.ig_user_id && c.userId === String(tokenRow.ig_user_id)) continue;
+    if (tokenRow.ig_user_id && c.userId === String(tokenRow.ig_user_id)) {
+      console.log('IG-DEBUG пропуск: комментарий самого владельца аккаунта');
+      continue;
+    }
     const trig = triggers.find((t) => matchesKeyword(c.text, t.keyword));
-    if (!trig) continue;
+    if (!trig) {
+      console.log('IG-DEBUG пропуск: ни одно слово не совпало с текстом', JSON.stringify(c.text));
+      continue;
+    }
+    console.log('IG-DEBUG совпало слово:', trig.keyword, '· отправляем ответ на комментарий', c.id);
 
     // дедупликация: Meta может прислать один и тот же комментарий повторно
     const seen = (await query('DECLARE $id AS Utf8; SELECT comment_id FROM ig_replied WHERE comment_id = $id;',
@@ -253,7 +267,8 @@ async function handleWebhook(data) {
     );
 
     try {
-      await sendPrivateReply(c.id, String(trig.reply_text || ''), tokenRow);
+      const res = await sendPrivateReply(c.id, String(trig.reply_text || ''), tokenRow);
+      console.log('IG-DEBUG сообщение отправлено, ответ Instagram:', JSON.stringify(res).slice(0, 500));
       await query('DECLARE $id AS Utf8; DECLARE $hits AS Uint64; UPDATE ig_triggers SET hits = $hits WHERE id = $id;',
         { $id: TypedValues.utf8(String(trig.id)), $hits: TypedValues.uint64((Number(trig.hits) || 0) + 1) });
       handled++;
@@ -376,6 +391,8 @@ module.exports.handler = async function (event) {
   const path = rawPath.split('?')[0].replace(/\/+$/, '');
   const qs = event.queryStringParameters || {};
   const headers = event.headers || {};
+  // ДИАГНОСТИКА: без этой строки не отличить вебхук Meta от запроса админки
+  console.log('IG-DEBUG запрос:', method, path);
   const rawBody = event.body
     ? (event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString() : String(event.body))
     : '';
@@ -405,7 +422,10 @@ module.exports.handler = async function (event) {
       return respond({ code: 403, body: { error: 'Неверный verify token' } });
     }
     if (method === 'POST' && path.endsWith('/webhook')) {
-      if (!checkSignature(headers, rawBody)) return respond({ code: 403, body: { error: 'Неверная подпись' } });
+      if (!checkSignature(headers, rawBody)) {
+        console.warn('IG-DEBUG вебхук отбит: подпись не совпала');
+        return respond({ code: 403, body: { error: 'Неверная подпись' } });
+      }
       return respond(await handleWebhook(data));
     }
 
