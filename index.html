@@ -302,8 +302,9 @@ input,select{font:inherit;}
     <div class="slot-form">
       <div class="fld"><label>Слово в комментарии</label><input id="igKeyword" type="text" placeholder="например: ноты"></div>
       <div class="fld"><label>Что отправить в личные сообщения</label><textarea id="igReply" rows="3" placeholder="Держите ноты: https://…" style="width:100%;border:1px solid var(--line-10);border-radius:16px;background:var(--white);padding:14px 16px;font-size:15px;resize:vertical;"></textarea></div>
+      <div class="fld"><label>Ответы в комментариях — по одному на строку, необязательно</label><textarea id="igCommentReplies" rows="3" placeholder="Благодарю! Отправила вам ноты в личные сообщения ✨&#10;Спасибо! Ноты уже у вас в личке 🎼&#10;Готово, загляните в сообщения!" style="width:100%;border:1px solid var(--line-10);border-radius:16px;background:var(--white);padding:14px 16px;font-size:15px;resize:vertical;"></textarea></div>
       <button class="btn primary block" id="igAddBtn"><span class="material-symbols-outlined">add</span>Добавить</button>
-      <div style="font-size:12px;color:var(--gray);margin-top:8px;">Бот отвечает в личку тем, кто напишет это слово в комментарии под постом. На один комментарий — один ответ.</div>
+      <div style="font-size:12px;color:var(--gray);margin-top:8px;">Бот отвечает в личку тем, кто напишет это слово в комментарии под постом. На один комментарий — один ответ. Если заполнить ответы в комментариях, бот ещё и ответит публично — каждый раз одним из вариантов, чтобы они не повторялись.</div>
     </div>
     <div id="igList"></div>
 
@@ -756,6 +757,7 @@ function igRenderList(){
       '<div class="meta">сработало раз: '+(t.hits||0)+'</div></div>'+
       '<span class="pill '+(t.enabled?"confirmed":"cancelled")+'">'+(t.enabled?"включено":"выключено")+'</span></div>'+
       '<div class="pkg" style="margin-top:10px;white-space:pre-wrap;">'+esc(t.reply_text)+'</div>'+
+      (t.comment_replies ? '<div class="pkg" style="margin-top:8px;">в комментариях отвечает, вариантов: '+t.comment_replies.split('\n').filter(Boolean).length+'</div>' : '')+
       '<div class="sheet-actions">'+
         '<button class="btn" onclick="igToggle(\'' + t.id + '\')">'+(t.enabled?"Выключить":"Включить")+'</button>'+
         '<button class="btn danger" onclick="igDelete(\'' + t.id + '\')">Удалить</button>'+
@@ -773,10 +775,11 @@ function igRenderStatus(st){
 
 $("#igAddBtn").onclick=function(){
   var btn=this, kw=$("#igKeyword").value.trim(), txt=$("#igReply").value.trim();
+  var pub=$("#igCommentReplies").value;
   if(!kw || !txt){ toast("Заполните слово и текст ответа"); return; }
   btn.disabled=true; var o=btn.innerHTML; btn.innerHTML='<span class="spin"></span>';
-  igApi("POST","/api/ig/admin/triggers",{keyword:kw, replyText:txt}).then(function(){
-    $("#igKeyword").value=""; $("#igReply").value="";
+  igApi("POST","/api/ig/admin/triggers",{keyword:kw, replyText:txt, commentReplies:pub}).then(function(){
+    $("#igKeyword").value=""; $("#igReply").value=""; $("#igCommentReplies").value="";
     toast("Добавлено"); return igLoad();
   }).catch(function(e){ toast(e.message); })
     .then(function(){ btn.disabled=false; btn.innerHTML=o; });

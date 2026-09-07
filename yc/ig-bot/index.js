@@ -216,6 +216,20 @@ async function refreshTokenIfNeeded(force) {
 // Приватный ответ на комментарий. Основной путь — /{comment-id}/private_replies,
 // как в документации Instagram Messaging; если он недоступен, пробуем
 // /{ig-user-id}/messages с recipient.comment_id (то же самое новым способом).
+// Публичный ответ под самим комментарием — от имени аккаунта Даши.
+// Вариантов может быть несколько, каждый с новой строки; берётся случайный,
+// чтобы под постом не висели одинаковые ответы подряд.
+function pickCommentReply(raw) {
+  const list = String(raw || '').split('\n').map((s) => s.trim()).filter(Boolean);
+  if (!list.length) return null;
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+async function sendCommentReply(commentId, text, tokenRow) {
+  return graphRequest('POST', '/' + GRAPH_VER + '/' + encodeURIComponent(commentId) + '/replies' +
+    '?access_token=' + encodeURIComponent(tokenRow.access_token), { message: text });
+}
+
 async function sendPrivateReply(commentId, text, tokenRow) {
   const qs = '?access_token=' + encodeURIComponent(tokenRow.access_token);
   // Основной путь — /{ig-user-id}/messages с recipient.comment_id: именно его
@@ -246,7 +260,7 @@ function matchesKeyword(text, keyword) {
 }
 
 async function activeTriggers() {
-  const rows = (await query('SELECT id, keyword, reply_text, enabled, hits, created_at FROM ig_triggers;'))[0] || [];
+  const rows = (await query('SELECT id, keyword, reply_text, comment_replies, enabled, hits, created_at FROM ig_triggers;'))[0] || [];
   return rows.filter((t) => Number(t.enabled) === 1);
 }
 
@@ -319,6 +333,13 @@ async function handleWebhook(data) {
     try {
       await sendPrivateReply(c.id, String(trig.reply_text || ''), tokenRow);
       console.log('Отправлено сообщение по слову', trig.keyword);
+      // Публичный ответ — необязательный: если вариантов нет, просто пропускаем.
+      // Его неудача не должна отменять уже отправленную личку.
+      const publicText = pickCommentReply(trig.comment_replies);
+      if (publicText) {
+        try { await sendCommentReply(c.id, publicText, tokenRow); }
+        catch (e2) { console.warn('Не удалось ответить в комментариях:', e2 && e2.message); }
+      }
       await query('DECLARE $id AS Utf8; DECLARE $hits AS Uint64; UPDATE ig_triggers SET hits = $hits WHERE id = $id;',
         { $id: TypedValues.utf8(String(trig.id)), $hits: TypedValues.uint64((Number(trig.hits) || 0) + 1) });
       handled++;
@@ -334,13 +355,22 @@ async function handleWebhook(data) {
 
 /* ---------- админ: ключевые слова ---------- */
 async function adminTriggers() {
-  const rows = (await query('SELECT id, keyword, reply_text, enabled, hits, created_at FROM ig_triggers;'))[0] || [];
+  const rows = (await query('SELECT id, keyword, reply_text, comment_replies, enabled, hits, created_at FROM ig_triggers;'))[0] || [];
   const out = rows.map((t) => ({
     id: t.id, keyword: t.keyword, reply_text: t.reply_text,
+    comment_replies: t.comment_replies || '',
     enabled: Number(t.enabled) === 1, hits: Number(t.hits) || 0,
     created_at: Number(t.created_at) || null,
   })).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
   return { code: 200, body: out };
+}
+
+// Варианты публичных ответов приходят одной строкой, по одному на строку.
+// Чистим пустые строки и режем список, чтобы не разрастался.
+function cleanCommentReplies(raw) {
+  return String(raw == null ? '' : raw).split('\n')
+    .map((s) => s.trim()).filter(Boolean).slice(0, 20)
+    .map((s) => s.slice(0, MAX_REPLY_LEN)).join('\n');
 }
 
 function validateTrigger(keyword, replyText) {
@@ -364,18 +394,19 @@ async function createTrigger(data) {
 
   const id = crypto.randomUUID();
   await query(
-    'DECLARE $id AS Utf8; DECLARE $kw AS Utf8; DECLARE $txt AS Utf8;\n' +
+    'DECLARE $id AS Utf8; DECLARE $kw AS Utf8; DECLARE $txt AS Utf8; DECLARE $pub AS Utf8;\n' +
     'DECLARE $en AS Uint32; DECLARE $created AS Uint64;\n' +
-    'UPSERT INTO ig_triggers (id, keyword, reply_text, enabled, hits, created_at)\n' +
-    'VALUES ($id, $kw, $txt, $en, 0, $created);',
+    'UPSERT INTO ig_triggers (id, keyword, reply_text, comment_replies, enabled, hits, created_at)\n' +
+    'VALUES ($id, $kw, $txt, $pub, $en, 0, $created);',
     { $id: TypedValues.utf8(id), $kw: TypedValues.utf8(keyword), $txt: TypedValues.utf8(replyText),
+      $pub: TypedValues.utf8(cleanCommentReplies(data.commentReplies)),
       $en: TypedValues.uint32(data.enabled === false ? 0 : 1), $created: TypedValues.uint64(Date.now()) }
   );
   return { code: 200, body: { ok: true, id } };
 }
 
 async function patchTrigger(id, data) {
-  const cur = (await query('DECLARE $id AS Utf8; SELECT id, keyword, reply_text, enabled FROM ig_triggers WHERE id = $id;',
+  const cur = (await query('DECLARE $id AS Utf8; SELECT id, keyword, reply_text, comment_replies, enabled FROM ig_triggers WHERE id = $id;',
     { $id: TypedValues.utf8(id) }))[0][0];
   if (!cur) return { code: 404, body: { error: 'Ключевое слово не найдено' } };
 
@@ -384,12 +415,15 @@ async function patchTrigger(id, data) {
   const err = validateTrigger(keyword, replyText);
   if (err) return { code: 400, body: { error: err } };
   const enabled = data.enabled === undefined ? Number(cur.enabled) : (data.enabled ? 1 : 0);
+  const commentReplies = data.commentReplies === undefined
+    ? String(cur.comment_replies || '') : cleanCommentReplies(data.commentReplies);
 
   await query(
-    'DECLARE $id AS Utf8; DECLARE $kw AS Utf8; DECLARE $txt AS Utf8; DECLARE $en AS Uint32;\n' +
-    'UPDATE ig_triggers SET keyword = $kw, reply_text = $txt, enabled = $en WHERE id = $id;',
+    'DECLARE $id AS Utf8; DECLARE $kw AS Utf8; DECLARE $txt AS Utf8; DECLARE $pub AS Utf8; DECLARE $en AS Uint32;\n' +
+    'UPDATE ig_triggers SET keyword = $kw, reply_text = $txt, comment_replies = $pub, enabled = $en WHERE id = $id;',
     { $id: TypedValues.utf8(id), $kw: TypedValues.utf8(keyword),
-      $txt: TypedValues.utf8(replyText), $en: TypedValues.uint32(enabled) }
+      $txt: TypedValues.utf8(replyText), $pub: TypedValues.utf8(commentReplies),
+      $en: TypedValues.uint32(enabled) }
   );
   return { code: 200, body: { ok: true } };
 }
