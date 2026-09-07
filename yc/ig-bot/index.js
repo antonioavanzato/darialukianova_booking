@@ -94,8 +94,64 @@ function checkToken(headers) {
   catch (e) { return false; }
 }
 
-/* ---------- Graph API поверх встроенного https (без axios/node-fetch) ---------- */
+/* ---------- Graph API поверх встроенного https (без axios/node-fetch) ----------
+ * graph.instagram.com из российских дата-центров недоступен — та же история, что
+ * с api.telegram.org в функции записи. Поэтому при заданном IG_RELAY_URL все
+ * вызовы идут через ретранслятор на Google Apps Script (yc/ig-bot/relay.gs),
+ * а он уже ходит в Instagram. Без переменной — прямой вызов, как раньше.
+ */
 function graphRequest(method, path, payload) {
+  if (process.env.IG_RELAY_URL) return relayRequest(method, path, payload);
+  return directGraphRequest(method, path, payload);
+}
+
+// Вызов Instagram через ретранслятор. Отвечает он тем же JSON, что и Graph API.
+function relayRequest(method, path, payload) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      secret: process.env.IG_RELAY_SECRET || '',
+      method: method, path: path, payload: payload || null,
+    });
+    const u = new URL(process.env.IG_RELAY_URL);
+    const req = https.request({
+      host: u.hostname, path: u.pathname + u.search, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      timeout: 10000,
+    }, (res) => {
+      // Apps Script отвечает редиректом на googleusercontent.com — идём следом
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        return followRedirect(res.headers.location, resolve, reject);
+      }
+      let raw = '';
+      res.on('data', (c) => { raw += c; });
+      res.on('end', () => finishRelay(raw, res.statusCode, resolve, reject));
+    });
+    req.on('timeout', () => req.destroy(new Error('Ретранслятор: таймаут запроса')));
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+function followRedirect(location, resolve, reject) {
+  https.get(location, { timeout: 10000 }, (r2) => {
+    let raw = '';
+    r2.on('data', (c) => { raw += c; });
+    r2.on('end', () => finishRelay(raw, r2.statusCode, resolve, reject));
+  }).on('error', reject);
+}
+
+function finishRelay(raw, statusCode, resolve, reject) {
+  let json = {};
+  try { json = raw ? JSON.parse(raw) : {}; } catch (e) { /* ретранслятор вернул не-JSON */ }
+  if (json && json.relayError) return reject(new Error('Ретранслятор: ' + json.relayError));
+  if (json && json.error) return reject(new Error('Instagram API: ' + (json.error.message || 'ошибка')));
+  if (statusCode >= 200 && statusCode < 300) return resolve(json);
+  reject(new Error('Ретранслятор: HTTP ' + statusCode + ' ' + String(raw).slice(0, 200)));
+}
+
+function directGraphRequest(method, path, payload) {
   return new Promise((resolve, reject) => {
     const body = payload ? JSON.stringify(payload) : null;
     const req = https.request({
