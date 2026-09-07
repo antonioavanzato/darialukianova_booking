@@ -723,7 +723,7 @@ function toast(msg){ var t=$("#toast"); t.textContent=msg; t.classList.add("show
    же токену админки. Ничего из логики записи здесь не используется.
    ⬇ ПОДСТАВИТЬ URL шлюза бота после деплоя (yc/ig-bot/deploy.sh) ⬇
    =================================================================== */
-var IG_API_URL = "";
+var IG_API_URL = "https://d5dilpavgcrbi4n9l3au.g4vq2kuy.apigw.yandexcloud.net";
 var igTriggers = [], igLoaded = false;
 
 function igApi(method, path, body){
