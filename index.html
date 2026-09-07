@@ -256,6 +256,7 @@ input,select{font:inherit;}
   <div class="tabs">
     <button class="tab on" data-tab="bookings">Заявки<span class="badge" id="pendBadge">0</span></button>
     <button class="tab" data-tab="calendar">Календарь</button>
+    <button class="tab" data-tab="instagram">Instagram</button>
   </div>
 
   <!-- BOOKINGS -->
@@ -293,6 +294,26 @@ input,select{font:inherit;}
       <div id="dayWindows"></div>
       <div class="secttl" id="dayBookTtl" style="display:none;">Записи в этот день</div>
       <div id="dayBookings"></div>
+    </div>
+  </div>
+
+  <!-- INSTAGRAM -->
+  <div class="view" id="view-instagram">
+    <div class="secttl">Ключевые слова</div>
+    <div class="slot-form">
+      <div class="fld"><label>Слово в комментарии</label><input id="igKeyword" type="text" placeholder="например: ноты"></div>
+      <div class="fld"><label>Что отправить в личные сообщения</label><textarea id="igReply" rows="3" placeholder="Держите ноты: https://…" style="width:100%;border:1px solid var(--line-10);border-radius:16px;background:var(--white);padding:14px 16px;font-size:15px;resize:vertical;"></textarea></div>
+      <button class="btn primary block" id="igAddBtn"><span class="material-symbols-outlined">add</span>Добавить</button>
+      <div style="font-size:12px;color:var(--gray);margin-top:8px;">Бот отвечает в личку тем, кто напишет это слово в комментарии под постом. На один комментарий — один ответ.</div>
+    </div>
+    <div id="igList"></div>
+
+    <div class="secttl" style="margin-top:22px;">Подключение</div>
+    <div class="slot-form">
+      <div id="igStatus" style="font-size:13px;color:var(--gray);line-height:1.7;">Загрузка…</div>
+      <div class="fld" style="margin-top:14px;"><label>Access-токен из Meta (вставляется один раз)</label><input id="igToken" type="text" placeholder="IGAA…"></div>
+      <div class="fld"><label>ID бизнес-аккаунта Instagram</label><input id="igUserId" type="text" placeholder="1784…"></div>
+      <button class="btn block" id="igTokenBtn"><span class="material-symbols-outlined">key</span>Сохранить токен</button>
     </div>
   </div>
 </div>
@@ -698,6 +719,95 @@ function fmtDur(m){ m=Number(m)||50; var h=Math.floor(m/60), mm=m%60; return (h?
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 var toastT;
 function toast(msg){ var t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(function(){t.classList.remove("show");},2600); }
+/* ===================================================================
+   INSTAGRAM — вкладка бота «слово в комментарии → сообщение в личку».
+   Отдельная функция и отдельный API Gateway (yc/ig-bot), вход — по тому
+   же токену админки. Ничего из логики записи здесь не используется.
+   =================================================================== */
+var IG_API_URL = "https://d5dilpavgcrbi4n9l3au.g4vq2kuy.apigw.yandexcloud.net";
+var igTriggers = [], igLoaded = false;
+
+function igApi(method, path, body){
+  if(!IG_API_URL) return Promise.reject(new Error("Не задан IG_API_URL в админке"));
+  return fetch(IG_API_URL+path, {
+    method: method,
+    headers: Object.assign({"Content-Type":"application/json"},
+      token ? {"Authorization":"Bearer "+token} : {}),
+    body: body ? JSON.stringify(body) : undefined
+  }).then(function(r){
+    return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||("HTTP "+r.status)); return j; });
+  });
+}
+
+function igLoad(){
+  return Promise.all([igApi("GET","/api/ig/admin/triggers"), igApi("GET","/api/ig/admin/status")])
+    .then(function(r){ igTriggers=r[0]; igRenderList(); igRenderStatus(r[1]); igLoaded=true; })
+    .catch(function(e){
+      $("#igStatus").textContent = e.message;
+      $("#igList").innerHTML = '<div class="empty"><span class="material-symbols-outlined">link_off</span>'+esc(e.message)+'</div>';
+    });
+}
+
+function igRenderList(){
+  var el=$("#igList");
+  if(!igTriggers.length){ el.innerHTML='<div class="empty"><span class="material-symbols-outlined">forum</span>Ключевых слов пока нет</div>'; return; }
+  el.innerHTML = igTriggers.map(function(t){
+    return '<div class="bcard">'+
+      '<div class="top"><div><div class="nm">'+esc(t.keyword)+'</div>'+
+      '<div class="meta">сработало раз: '+(t.hits||0)+'</div></div>'+
+      '<span class="pill '+(t.enabled?"confirmed":"cancelled")+'">'+(t.enabled?"включено":"выключено")+'</span></div>'+
+      '<div class="pkg" style="margin-top:10px;white-space:pre-wrap;">'+esc(t.reply_text)+'</div>'+
+      '<div class="sheet-actions">'+
+        '<button class="btn" onclick="igToggle(\'' + t.id + '\')">'+(t.enabled?"Выключить":"Включить")+'</button>'+
+        '<button class="btn danger" onclick="igDelete(\'' + t.id + '\')">Удалить</button>'+
+      '</div></div>';
+  }).join("");
+}
+
+function igRenderStatus(st){
+  if(!st.hasToken){ $("#igStatus").innerHTML='Токен Instagram ещё не задан — бот не отвечает.'; return; }
+  var left = st.expiresAt ? Math.max(0, Math.round((st.expiresAt-Date.now())/86400000)) : null;
+  $("#igStatus").innerHTML = 'Аккаунт подключён'+(st.igUserId?' (id '+esc(st.igUserId)+')':'')+'.<br>'+
+    (left!==null?'Токен действует ещё '+left+' дн. — продлевается сам.<br>':'')+
+    'Отправлено сообщений: '+(st.repliedTotal||0)+'.';
+}
+
+$("#igAddBtn").onclick=function(){
+  var btn=this, kw=$("#igKeyword").value.trim(), txt=$("#igReply").value.trim();
+  if(!kw || !txt){ toast("Заполните слово и текст ответа"); return; }
+  btn.disabled=true; var o=btn.innerHTML; btn.innerHTML='<span class="spin"></span>';
+  igApi("POST","/api/ig/admin/triggers",{keyword:kw, replyText:txt}).then(function(){
+    $("#igKeyword").value=""; $("#igReply").value="";
+    toast("Добавлено"); return igLoad();
+  }).catch(function(e){ toast(e.message); })
+    .then(function(){ btn.disabled=false; btn.innerHTML=o; });
+};
+
+function igToggle(id){
+  var t=igTriggers.filter(function(x){return x.id===id;})[0]; if(!t) return;
+  igApi("PATCH","/api/ig/admin/triggers/"+id,{enabled:!t.enabled})
+    .then(igLoad).catch(function(e){ toast(e.message); });
+}
+function igDelete(id){
+  if(!confirm("Удалить это ключевое слово?")) return;
+  igApi("DELETE","/api/ig/admin/triggers/"+id, null)
+    .then(function(){ toast("Удалено"); return igLoad(); }).catch(function(e){ toast(e.message); });
+}
+
+$("#igTokenBtn").onclick=function(){
+  var btn=this, tk=$("#igToken").value.trim(), uid=$("#igUserId").value.trim();
+  if(!tk){ toast("Вставьте токен из Meta"); return; }
+  btn.disabled=true; var o=btn.innerHTML; btn.innerHTML='<span class="spin"></span>';
+  igApi("POST","/api/ig/admin/token",{accessToken:tk, igUserId:uid}).then(function(){
+    $("#igToken").value=""; toast("Токен сохранён"); return igLoad();
+  }).catch(function(e){ toast(e.message); })
+    .then(function(){ btn.disabled=false; btn.innerHTML=o; });
+};
+
+/* данные вкладки грузим лениво — при первом её открытии */
+document.querySelectorAll('.tab[data-tab="instagram"]').forEach(function(t){
+  t.addEventListener("click", function(){ if(!igLoaded) igLoad(); });
+});
 </script>
 </body>
 </html>
