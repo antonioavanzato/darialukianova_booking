@@ -120,7 +120,7 @@ function relayRequest(method, path, payload) {
     const req = https.request({
       host: u.hostname, path: u.pathname + u.search, method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-      timeout: 10000,
+      timeout: 20000,
     }, (res) => {
       // Apps Script отвечает редиректом на googleusercontent.com — идём следом
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -139,7 +139,7 @@ function relayRequest(method, path, payload) {
 }
 
 function followRedirect(location, resolve, reject) {
-  https.get(location, { timeout: 10000 }, (r2) => {
+  https.get(location, { timeout: 20000 }, (r2) => {
     let raw = '';
     r2.on('data', (c) => { raw += c; });
     r2.on('end', () => finishRelay(raw, r2.statusCode, resolve, reject));
@@ -218,15 +218,17 @@ async function refreshTokenIfNeeded(force) {
 // /{ig-user-id}/messages с recipient.comment_id (то же самое новым способом).
 async function sendPrivateReply(commentId, text, tokenRow) {
   const qs = '?access_token=' + encodeURIComponent(tokenRow.access_token);
-  try {
-    return await graphRequest('POST', '/' + GRAPH_VER + '/' + encodeURIComponent(commentId) + '/private_replies' + qs,
-      { message: text });
-  } catch (e) {
-    if (!tokenRow.ig_user_id) throw e;
-    console.warn('private_replies не сработал, пробуем /messages:', e.message);
+  // Основной путь — /{ig-user-id}/messages с recipient.comment_id: именно его
+  // поддерживает Instagram API with business login. Старый /private_replies
+  // отвечает «Unsupported post request», а лишняя попытка через медленный
+  // ретранслятор съедала секунды и упиралась в таймаут функции.
+  if (tokenRow.ig_user_id) {
     return graphRequest('POST', '/' + GRAPH_VER + '/' + encodeURIComponent(tokenRow.ig_user_id) + '/messages' + qs,
       { recipient: { comment_id: commentId }, message: { text } });
   }
+  // Запасной путь, если ID аккаунта почему-то не задан.
+  return graphRequest('POST', '/' + GRAPH_VER + '/' + encodeURIComponent(commentId) + '/private_replies' + qs,
+    { message: text });
 }
 
 /* ---------- ключевые слова ---------- */
