@@ -7,6 +7,8 @@ CREATE TABLE ig_triggers (
     id Utf8 NOT NULL,
     keyword Utf8,          -- ключевое слово в нижнем регистре, например "ноты"
     reply_text Utf8,       -- текст личного сообщения (до 900 символов)
+    comment_replies Utf8,  -- варианты публичного ответа под комментарием,
+                           -- по одному на строку; пусто — не отвечать
     enabled Uint32,        -- 1 включён | 0 выключен
     hits Uint64,           -- сколько раз сработал
     created_at Uint64,     -- ms epoch
@@ -33,3 +35,6 @@ CREATE TABLE ig_token (
     refreshed_at Uint64,   -- ms epoch последнего продления
     PRIMARY KEY (id)
 );
+
+-- Если таблица ig_triggers уже создана без comment_replies, добавить колонку:
+-- ALTER TABLE ig_triggers ADD COLUMN comment_replies Utf8;
