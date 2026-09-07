@@ -1,0 +1,20 @@
+# Отдельный API Gateway для Instagram-бота.
+# Сделан отдельным файлом и отдельным шлюзом намеренно: спецификация шлюза
+# записи (yc/apigw.yaml) и её деплой (yc/deploy.sh) остаются нетронутыми,
+# так что выкладка бота физически не может задеть форму записи.
+openapi: 3.0.0
+info:
+  title: daria-ig-bot
+  version: 1.0.0
+paths:
+  /api/ig/{proxy+}:
+    x-yc-apigateway-any-method:
+      parameters:
+        - name: proxy
+          in: path
+          required: true
+          schema: { type: string }
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: __FUNCTION_ID__
+        service_account_id: __SA_ID__
