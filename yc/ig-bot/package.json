@@ -1,0 +1,10 @@
+{
+  "name": "daria-ig-bot",
+  "version": "1.0.0",
+  "description": "Instagram comment-to-DM бот Дарьи Лукьяновой — Yandex Cloud Function + YDB",
+  "main": "index.js",
+  "dependencies": {
+    "ydb-sdk": "^5.9.0",
+    "@yandex-cloud/nodejs-sdk": "^2.7.7"
+  }
+}

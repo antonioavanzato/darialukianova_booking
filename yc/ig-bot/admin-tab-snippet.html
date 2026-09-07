@@ -1,0 +1,38 @@
+<!-- =====================================================================
+     Вкладка «Instagram» для yc/admin/index.html.
+     Три куска ниже уже вставлены в админку; файл оставлен как справка —
+     что именно было добавлено, чтобы при правках админки было видно
+     границы «нового» кода. Существующие вкладки не менялись.
+     ===================================================================== -->
+
+<!-- 1) кнопка вкладки — рядом с «Заявки» и «Календарь» -->
+<button class="tab" data-tab="instagram">Instagram</button>
+
+<!-- 2) сама вкладка — после блока <div class="view" id="view-calendar"> -->
+<div class="view" id="view-instagram">
+  <div class="secttl">Ключевые слова</div>
+  <div class="slot-form">
+    <div class="fld"><label>Слово в комментарии</label><input id="igKeyword" type="text" placeholder="например: ноты"></div>
+    <div class="fld"><label>Что отправить в личные сообщения</label>
+      <textarea id="igReply" rows="3" placeholder="Держите ноты: https://…"></textarea></div>
+    <button class="btn primary block" id="igAddBtn"><span class="material-symbols-outlined">add</span>Добавить</button>
+    <div style="font-size:12px;color:var(--gray);margin-top:8px;">Бот отвечает в личку тем, кто напишет это слово в комментарии под постом. На один комментарий — один ответ.</div>
+  </div>
+  <div id="igList"></div>
+
+  <div class="secttl" style="margin-top:22px;">Подключение</div>
+  <div class="slot-form">
+    <div id="igStatus" style="font-size:13px;color:var(--gray);line-height:1.7;">Загрузка…</div>
+    <div class="fld" style="margin-top:14px;"><label>Access-токен из Meta (вставляется один раз)</label>
+      <input id="igToken" type="text" placeholder="IGAA…"></div>
+    <div class="fld"><label>ID бизнес-аккаунта Instagram</label><input id="igUserId" type="text" placeholder="1784…"></div>
+    <button class="btn block" id="igTokenBtn"><span class="material-symbols-outlined">key</span>Сохранить токен</button>
+  </div>
+</div>
+
+<!-- 3) JS — добавлен в конец <script> админки, ничего существующего не трогает.
+        IG_API_URL подставляется после запуска yc/ig-bot/deploy.sh. -->
+<script>
+var IG_API_URL = "";
+function igApi(method, path, body){ /* см. yc/admin/index.html, блок INSTAGRAM */ }
+</script>
