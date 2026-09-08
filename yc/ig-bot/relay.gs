@@ -55,11 +55,15 @@ function doPost(e) {
   var data = {};
   try { data = JSON.parse(raw); } catch (err) { /* не-JSON тело */ }
 
-  // Направление «бот → Instagram»: узнаём по паролю и полю method.
-  if (data && data.secret && data.method) {
+  // Направление «бот → Instagram».
+  if (data && data.secret && (data.method || data.op)) {
     if (data.secret !== RELAY_SECRET) {
       return json({ relayError: 'Неверный пароль ретранслятора' });
     }
+    // Ответ на комментарий целиком: личное сообщение и публичный ответ за один
+    // заход. Так бот ждёт ретранслятор один раз, а не два — иначе обработка
+    // не укладывается в таймаут функции.
+    if (data.op === 'reply') return json(replyToComment(data));
     return json(callInstagram(data.method, data.path, data.payload));
   }
 
@@ -76,6 +80,30 @@ function doPost(e) {
   }
   // Meta ждёт быстрый ответ, содержимое ей неважно.
   return ContentService.createTextOutput('EVENT_RECEIVED');
+}
+
+// Личное сообщение автору комментария плюс, если задан, публичный ответ.
+// Публичный ответ необязателен: его неудача не отменяет отправленную личку.
+function replyToComment(data) {
+  var qs = '?access_token=' + encodeURIComponent(data.accessToken);
+  var dm = callInstagram('POST',
+    '/' + data.version + '/' + encodeURIComponent(data.igUserId) + '/messages' + qs,
+    { recipient: { comment_id: data.commentId }, message: { text: data.dmText } });
+  if (dm && (dm.error || dm.relayError)) return dm;
+
+  var out = { dm: dm };
+  if (data.publicText) {
+    var pub = callInstagram('POST',
+      '/' + data.version + '/' + encodeURIComponent(data.commentId) + '/replies' + qs,
+      { message: data.publicText });
+    if (pub && (pub.error || pub.relayError)) {
+      console.warn('Публичный ответ не отправлен: ' + JSON.stringify(pub));
+      out.publicFailed = true;
+    } else {
+      out.publicSent = true;
+    }
+  }
+  return out;
 }
 
 // Вызов Instagram Graph API от имени скрипта.
