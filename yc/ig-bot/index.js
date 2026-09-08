@@ -110,12 +110,12 @@ function graphRequest(method, path, payload) {
 }
 
 // Вызов Instagram через ретранслятор. Отвечает он тем же JSON, что и Graph API.
-function relayRequest(method, path, payload) {
+function relayRequest(method, path, payload, bundle) {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({
-      secret: process.env.IG_RELAY_SECRET || '',
-      method: method, path: path, payload: payload || null,
-    });
+    const body = JSON.stringify(Object.assign(
+      { secret: process.env.IG_RELAY_SECRET || '' },
+      bundle || { method: method, path: path, payload: payload || null }
+    ));
     const u = new URL(process.env.IG_RELAY_URL);
     const req = https.request({
       host: u.hostname, path: u.pathname + u.search, method: 'POST',
@@ -230,6 +230,20 @@ async function sendCommentReply(commentId, text, tokenRow) {
     '?access_token=' + encodeURIComponent(tokenRow.access_token), { message: text });
 }
 
+// Одним заходом: личка + публичный ответ. Ретранслятор на Apps Script отвечает
+// медленно, и два отдельных вызова не укладывались в таймаут функции.
+function relayReplyBundle(commentId, dmText, publicText, tokenRow) {
+  return relayRequest(null, null, null, {
+    op: 'reply',
+    version: GRAPH_VER,
+    commentId: commentId,
+    igUserId: tokenRow.ig_user_id,
+    accessToken: tokenRow.access_token,
+    dmText: dmText,
+    publicText: publicText || '',
+  });
+}
+
 async function sendPrivateReply(commentId, text, tokenRow) {
   const qs = '?access_token=' + encodeURIComponent(tokenRow.access_token);
   // Основной путь — /{ig-user-id}/messages с recipient.comment_id: именно его
@@ -331,15 +345,19 @@ async function handleWebhook(data) {
     );
 
     try {
-      await sendPrivateReply(c.id, String(trig.reply_text || ''), tokenRow);
-      console.log('Отправлено сообщение по слову', trig.keyword);
-      // Публичный ответ — необязательный: если вариантов нет, просто пропускаем.
-      // Его неудача не должна отменять уже отправленную личку.
       const publicText = pickCommentReply(trig.comment_replies);
-      if (publicText) {
-        try { await sendCommentReply(c.id, publicText, tokenRow); }
-        catch (e2) { console.warn('Не удалось ответить в комментариях:', e2 && e2.message); }
+      if (process.env.IG_RELAY_URL && tokenRow.ig_user_id) {
+        // Через ретранслятор — одним заходом, иначе не хватает времени.
+        const r = await relayReplyBundle(c.id, String(trig.reply_text || ''), publicText, tokenRow);
+        if (r && r.publicFailed) console.warn('Публичный ответ не отправлен');
+      } else {
+        await sendPrivateReply(c.id, String(trig.reply_text || ''), tokenRow);
+        if (publicText) {
+          try { await sendCommentReply(c.id, publicText, tokenRow); }
+          catch (e2) { console.warn('Не удалось ответить в комментариях:', e2 && e2.message); }
+        }
       }
+      console.log('Отправлено сообщение по слову', trig.keyword);
       await query('DECLARE $id AS Utf8; DECLARE $hits AS Uint64; UPDATE ig_triggers SET hits = $hits WHERE id = $id;',
         { $id: TypedValues.utf8(String(trig.id)), $hits: TypedValues.uint64((Number(trig.hits) || 0) + 1) });
       handled++;
